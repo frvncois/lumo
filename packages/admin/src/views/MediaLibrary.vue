@@ -147,6 +147,7 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
+import { Card, CardHeader, CardContent, Button, List, ListItem } from '../components/ui'
 import { api } from '../utils/api'
 
 const media = ref<any[]>([])
@@ -155,10 +156,22 @@ const isLoading = ref(true)
 const isUploading = ref(false)
 const error = ref('')
 const uploadSuccess = ref(false)
+const mounted = ref(false)
 
 const filteredMedia = computed(() => {
   if (filterType.value === 'all') return media.value
   return media.value.filter((item) => getMediaType(item.mimeType) === filterType.value)
+})
+
+const currentFilterLabel = computed(() => {
+  const labels = {
+    all: 'All Media',
+    image: 'Images',
+    video: 'Videos',
+    audio: 'Audio',
+    document: 'Documents'
+  }
+  return labels[filterType.value]
 })
 
 watch(filterType, () => {
@@ -166,6 +179,7 @@ watch(filterType, () => {
 })
 
 onMounted(async () => {
+  mounted.value = true
   await loadMedia()
 })
 
@@ -267,6 +281,22 @@ function getMediaType(mimeType: string): 'image' | 'video' | 'audio' | 'document
   return 'document'
 }
 
+function getMediaSubtitle(item: any): string {
+  const parts = [item.mimeType]
+
+  if (item.width && item.height) {
+    parts.push(`${item.width} × ${item.height}`)
+  }
+
+  if (item.duration) {
+    parts.push(formatDuration(item.duration))
+  }
+
+  parts.push(new Date(item.createdAt).toLocaleDateString())
+
+  return parts.join(' • ')
+}
+
 function formatDuration(seconds: number): string {
   const hours = Math.floor(seconds / 3600)
   const minutes = Math.floor((seconds % 3600) / 60)
@@ -276,15 +306,5 @@ function formatDuration(seconds: number): string {
     return `${hours}:${minutes.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`
   }
   return `${minutes}:${secs.toString().padStart(2, '0')}`
-}
-
-function formatFileSize(bytes: number): string {
-  if (bytes === 0) return '0 Bytes'
-
-  const k = 1024
-  const sizes = ['Bytes', 'KB', 'MB', 'GB']
-  const i = Math.floor(Math.log(bytes) / Math.log(k))
-
-  return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i]
 }
 </script>

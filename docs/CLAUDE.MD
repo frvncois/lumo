@@ -197,9 +197,9 @@ interface MediaReference {
 - `collaborators`
 
 ### Authentication
-- Magic link only (no passwords)
+- Password-based authentication
 - Stateless signed cookies for sessions
-- First owner created via CLI
+- First owner created via setup flow or CLI
 
 ---
 
@@ -331,7 +331,6 @@ npx lumo add-owner       # Add first owner
 - Use ORMs (use explicit SQL)
 - Add Node APIs to Core package
 - Implement structured repeaters
-- Add password authentication
 - Auto-delete media
 
 ---

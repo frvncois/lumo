@@ -23,12 +23,6 @@ const routes: RouteRecordRaw[] = [
     meta: { requiresAuth: false },
   },
   {
-    path: '/admin/verify',
-    name: 'Verify',
-    component: () => import('../views/Verify.vue'),
-    meta: { requiresAuth: false },
-  },
-  {
     path: '/admin',
     component: () => import('../components/Layout.vue'),
     meta: { requiresAuth: true },

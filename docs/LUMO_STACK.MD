@@ -58,36 +58,28 @@ TypeScript is mandatory across the server.
 
 **Initial Setup:**
 
-* First owner created via CLI (`lumo init` prompts for email)
+* First owner created via `/admin/setup` (email + password)
 * No default admin credentials
-* No passwords in V1
+* Password-based authentication
 
 **Authentication Flow:**
 
-1. User enters email at `/admin/login`
-2. Server generates signed magic link token (15 minute expiry)
-3. Server sends email via configured provider
-4. User clicks link → server validates token → session created
-5. Session stored as signed HTTP-only cookie
+1. User enters email and password at `/admin/login`
+2. Server verifies credentials against stored hash
+3. On success, session created as signed HTTP-only cookie
+4. Session contains: `userId`, `role`, `issuedAt`, `expiresAt`
 
 **Session Implementation:**
 
 * Stateless signed cookies (no server-side session table)
-* Cookie contains: `userId`, `role`, `issuedAt`, `expiresAt`
 * Cookie flags: `HttpOnly`, `Secure`, `SameSite=Lax`
 * Session duration: 7 days (configurable)
 
-**Email Dependency:**
-
-* Magic links require email delivery
-* Embedded mode: configure SMTP or transactional email service (e.g., Resend, Postmark)
-* Lumo Cloud: managed email delivery
-
 **Security Notes:**
 
-* Magic link tokens are single-use
-* Tokens are signed with server secret
+* Passwords hashed with bcrypt (12 rounds)
 * Failed login attempts are rate-limited
+* Minimum password length: 8 characters
 
 ---
 

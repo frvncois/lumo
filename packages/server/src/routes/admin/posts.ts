@@ -22,7 +22,7 @@ import {
   deletePostTranslation,
   deletePost,
 } from '@lumo/db'
-import { validatePostTranslation } from '@lumo/core'
+import { validatePostTranslation, validatePostStatus } from '@lumo/core'
 import { generateId } from '../../utils/tokens.js'
 import type { TranslationContent, PostStatus, Post } from '@lumo/core'
 import { errors } from '../../utils/errors.js'
@@ -101,6 +101,12 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
       return errors.validation(reply, `Post type "${type}" not found in config`)
     }
 
+    // Validate status and publishedAt
+    const statusResult = validatePostStatus(status, publishedAt)
+    if (!statusResult.success) {
+      return errors.validation(reply, 'Validation failed', statusResult.errors)
+    }
+
     const postId = generateId('post')
     const post = createPost(app.db, {
       id: postId,
@@ -132,6 +138,15 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
     const post = getPostById(app.db, id)
     if (!post) {
       return errors.notFound(reply, 'Post')
+    }
+
+    // If status is being updated, validate it
+    if (status !== undefined) {
+      const effectivePublishedAt = publishedAt !== undefined ? publishedAt : post.publishedAt
+      const statusResult = validatePostStatus(status, effectivePublishedAt)
+      if (!statusResult.success) {
+        return errors.validation(reply, 'Validation failed', statusResult.errors)
+      }
     }
 
     updatePost(app.db, id, { status, publishedAt, position })

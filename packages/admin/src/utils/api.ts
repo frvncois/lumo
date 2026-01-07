@@ -46,7 +46,7 @@ class ApiClient {
 
   // Auth
   async getAuthStatus() {
-    return this.request<{ needsSetup: boolean; emailEnabled: boolean }>('/auth/status')
+    return this.request<{ needsSetup: boolean }>('/auth/status')
   }
 
   async setup(email: string, password: string) {
@@ -60,13 +60,6 @@ class ApiClient {
     return this.request<{ user: { id: string; email: string; role: string } }>('/auth/login', {
       method: 'POST',
       body: JSON.stringify({ email, password }),
-    })
-  }
-
-  async requestMagicLink(email: string) {
-    return this.request('/auth/magic-link', {
-      method: 'POST',
-      body: JSON.stringify({ email }),
     })
   }
 

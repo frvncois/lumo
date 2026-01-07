@@ -6,6 +6,8 @@ import type { FastifyInstance } from 'fastify'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireOwner } from '../../middleware/permissions.js'
 import { getSetting, setSetting, getAllSettings } from '@lumo/db'
+import { errors } from '../../utils/errors.js'
+import { adminUpdateLanguagesSchema } from '../../schemas/index.js'
 
 export async function registerAdminSettingsRoutes(app: FastifyInstance) {
   /**
@@ -26,37 +28,22 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance) {
       languages: string[]
       defaultLanguage: string
     }
-  }>('/api/admin/settings/languages', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+  }>('/api/admin/settings/languages', { preHandler: [requireAuth, requireOwner], schema: adminUpdateLanguagesSchema }, async (request, reply) => {
     const { languages, defaultLanguage } = request.body
 
     // Validation
     if (!Array.isArray(languages) || languages.length === 0) {
-      return reply.code(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'At least one language is required',
-        },
-      })
+      return errors.validation(reply, 'At least one language is required')
     }
 
     if (!languages.includes(defaultLanguage)) {
-      return reply.code(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Default language must be in the languages list',
-        },
-      })
+      return errors.validation(reply, 'Default language must be in the languages list')
     }
 
     // Validate language codes (simple check for 2-letter codes)
     for (const lang of languages) {
       if (!/^[a-z]{2}(-[A-Z]{2})?$/.test(lang)) {
-        return reply.code(400).send({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: `Invalid language code: ${lang}. Use ISO 639-1 codes (e.g., "en", "fr", "en-US")`,
-          },
-        })
+        return errors.validation(reply, `Invalid language code: ${lang}. Use ISO 639-1 codes (e.g., "en", "fr", "en-US")`)
       }
     }
 

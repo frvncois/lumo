@@ -19,18 +19,26 @@ import {
   upsertPageTranslation,
   deletePageTranslation,
   deletePage,
-  isPageSlugAvailable,
 } from '@lumo/db'
 import { validatePageTranslation } from '@lumo/core'
 import { generateId } from '../../utils/tokens.js'
 import type { PageTranslations, TranslationContent } from '@lumo/core'
+import { errors } from '../../utils/errors.js'
+import {
+  adminListPagesSchema,
+  adminGetPageByIdSchema,
+  adminCreatePageSchema,
+  adminUpsertPageTranslationSchema,
+  adminDeletePageTranslationSchema,
+  adminDeletePageSchema,
+} from '../../schemas/index.js'
 
 export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<void> {
   /**
    * GET /api/admin/pages
    * List all pages with all translations
    */
-  app.get('/api/admin/pages', { preHandler: requireAuth }, async () => {
+  app.get('/api/admin/pages', { preHandler: requireAuth, schema: adminListPagesSchema }, async () => {
     const pages = listPages(app.db)
     return { items: pages }
   })
@@ -41,7 +49,7 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
    */
   app.get<{
     Params: { id: string }
-  }>('/api/admin/pages/:id', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/pages/:id', { preHandler: requireAuth, schema: adminGetPageByIdSchema }, async (request, reply) => {
     const { id } = request.params
     let page = getPageById(app.db, id)
 
@@ -49,9 +57,7 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
     if (!page) {
       // Check if page ID exists in config
       if (!app.config.pages?.[id]) {
-        return reply.code(404).send({
-          error: { code: 'NOT_FOUND', message: `Page "${id}" not found in configuration` },
-        })
+        return errors.notFound(reply, `Page "${id}"`)
       }
 
       // Create empty page record
@@ -69,17 +75,12 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
     Body: {
       translations: PageTranslations
     }
-  }>('/api/admin/pages', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/pages', { preHandler: requireAuth, schema: adminCreatePageSchema }, async (request, reply) => {
     const { translations } = request.body
 
     // Validate default language exists
     if (!translations[app.config.defaultLanguage]) {
-      return reply.code(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: `Default language "${app.config.defaultLanguage}" translation is required`,
-        },
-      })
+      return errors.validation(reply, `Default language "${app.config.defaultLanguage}" translation is required`)
     }
 
     // Get page slug from default translation
@@ -88,42 +89,30 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
 
     // Check if page exists in config
     if (!app.config.pages?.[pageSlug]) {
-      return reply.code(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: `Page "${pageSlug}" is not defined in configuration`,
-        },
-      })
+      return errors.validation(reply, `Page "${pageSlug}" is not defined in configuration`)
     }
 
     // Validate each translation
     for (const [lang, content] of Object.entries(translations)) {
       const result = validatePageTranslation(pageSlug, lang, content, app.config)
       if (!result.success) {
-        return reply.code(400).send({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Validation failed',
-            details: result.errors,
-          },
-        })
+        return errors.validation(reply, 'Validation failed', result.errors)
       }
 
-      // Check slug availability
-      if (!isPageSlugAvailable(app.db, content.slug, lang)) {
-        return reply.code(409).send({
-          error: {
-            code: 'CONFLICT',
-            message: `Slug "${content.slug}" already exists for language "${lang}"`,
-          },
-        })
-      }
     }
 
     const pageId = generateId('page')
-    const page = createPage(app.db, pageId, translations)
 
-    return reply.code(201).send(page)
+    try {
+      const page = createPage(app.db, pageId, translations)
+      return reply.code(201).send(page)
+    } catch (error: any) {
+      // Handle unique constraint violation
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.message?.includes('UNIQUE constraint failed')) {
+        return errors.conflict(reply, 'A slug already exists for one of the translations')
+      }
+      throw error
+    }
   })
 
   /**
@@ -133,7 +122,7 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
   app.put<{
     Params: { id: string; lang: string }
     Body: TranslationContent
-  }>('/api/admin/pages/:id/translations/:lang', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/pages/:id/translations/:lang', { preHandler: requireAuth, schema: adminUpsertPageTranslationSchema }, async (request, reply) => {
     const { id, lang } = request.params
     const content = request.body
 
@@ -143,9 +132,7 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
     if (!page) {
       // Check if page ID exists in config
       if (!app.config.pages?.[id]) {
-        return reply.code(404).send({
-          error: { code: 'NOT_FOUND', message: `Page "${id}" not found in configuration` },
-        })
+        return errors.notFound(reply, `Page "${id}"`)
       }
 
       // Create page record
@@ -167,20 +154,18 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
       })
     }
 
-    // Check slug availability
-    if (!isPageSlugAvailable(app.db, content.slug, lang, id)) {
-      return reply.code(409).send({
-        error: {
-          code: 'CONFLICT',
-          message: `Slug "${content.slug}" already exists for language "${lang}"`,
-        },
-      })
+    // Attempt upsert - let database handle uniqueness
+    try {
+      upsertPageTranslation(app.db, id, lang, content)
+      const updated = getPageById(app.db, id)
+      return updated
+    } catch (error: any) {
+      // Handle unique constraint violation
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.message?.includes('UNIQUE constraint failed')) {
+        return errors.conflict(reply, `Slug "${content.slug}" already exists for language "${lang}"`)
+      }
+      throw error
     }
-
-    upsertPageTranslation(app.db, id, lang, content)
-    const updated = getPageById(app.db, id)
-
-    return updated
   })
 
   /**
@@ -189,30 +174,21 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
    */
   app.delete<{
     Params: { id: string; lang: string }
-  }>('/api/admin/pages/:id/translations/:lang', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+  }>('/api/admin/pages/:id/translations/:lang', { preHandler: [requireAuth, requireOwner], schema: adminDeletePageTranslationSchema }, async (request, reply) => {
     const { id, lang } = request.params
 
     // Cannot delete default language
     if (lang === app.config.defaultLanguage) {
-      return reply.code(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: 'Cannot delete default language translation',
-        },
-      })
+      return errors.forbidden(reply, 'Cannot delete default language translation')
     }
 
     const page = getPageById(app.db, id)
     if (!page) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Page not found' },
-      })
+      return errors.notFound(reply, 'Page')
     }
 
     if (!page.translations[lang]) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Translation not found' },
-      })
+      return errors.notFound(reply, 'Translation')
     }
 
     deletePageTranslation(app.db, id, lang)
@@ -226,12 +202,10 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
    */
   app.delete<{
     Params: { id: string }
-  }>('/api/admin/pages/:id', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+  }>('/api/admin/pages/:id', { preHandler: [requireAuth, requireOwner], schema: adminDeletePageSchema }, async (request, reply) => {
     const page = getPageById(app.db, request.params.id)
     if (!page) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Page not found' },
-      })
+      return errors.notFound(reply, 'Page')
     }
 
     deletePage(app.db, request.params.id)

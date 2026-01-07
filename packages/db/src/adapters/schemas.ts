@@ -6,7 +6,14 @@
 
 import type Database from 'better-sqlite3'
 import type { FieldDefinition, PageSchema, PostTypeSchema } from '@lumo/core'
-import { randomUUID } from 'node:crypto'
+import { nanoid } from 'nanoid'
+
+/**
+ * Generate a prefixed ID for schemas
+ */
+function generateSchemaId(prefix: string): string {
+  return `${prefix}_${nanoid()}`
+}
 
 /**
  * Database Row Types
@@ -72,7 +79,7 @@ export function createPageSchema(
   db: Database.Database,
   input: PageSchemaInput
 ): PageSchemaWithMetadata {
-  const id = randomUUID()
+  const id = generateSchemaId('pschema')
   const now = new Date().toISOString()
 
   const stmt = db.prepare(`
@@ -171,7 +178,7 @@ export function createPostTypeSchema(
   db: Database.Database,
   input: PostTypeSchemaInput
 ): PostTypeSchemaWithMetadata {
-  const id = randomUUID()
+  const id = generateSchemaId('ptschema')
   const now = new Date().toISOString()
 
   const stmt = db.prepare(`

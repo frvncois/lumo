@@ -6,6 +6,8 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import type { AuthenticatedRequest } from './auth.js'
+import { errors } from '../utils/errors.js'
+import { UserRoles } from '../constants.js'
 
 /**
  * Require owner role
@@ -14,22 +16,12 @@ export async function requireOwner(request: FastifyRequest, reply: FastifyReply)
   const user = (request as AuthenticatedRequest).user
 
   if (!user) {
-    reply.code(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      },
-    })
+    errors.unauthorized(reply)
     return
   }
 
-  if (user.role !== 'owner') {
-    reply.code(403).send({
-      error: {
-        code: 'FORBIDDEN',
-        message: 'Owner role required',
-      },
-    })
+  if (user.role !== UserRoles.OWNER) {
+    errors.forbidden(reply, 'Owner role required')
     return
   }
 }
@@ -41,22 +33,12 @@ export async function requireEditor(request: FastifyRequest, reply: FastifyReply
   const user = (request as AuthenticatedRequest).user
 
   if (!user) {
-    reply.code(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      },
-    })
+    errors.unauthorized(reply)
     return
   }
 
-  if (user.role !== 'owner' && user.role !== 'editor') {
-    reply.code(403).send({
-      error: {
-        code: 'FORBIDDEN',
-        message: 'Editor or owner role required',
-      },
-    })
+  if (user.role !== UserRoles.OWNER && user.role !== UserRoles.EDITOR) {
+    errors.forbidden(reply, 'Editor or owner role required')
     return
   }
 }

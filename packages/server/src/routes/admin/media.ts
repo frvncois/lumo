@@ -24,6 +24,13 @@ import {
   deleteFile,
   getFileMetadata,
 } from '../../utils/media.js'
+import { getMediaType, getMaxSize, formatBytes } from '../../utils/fileValidation.js'
+import { errors } from '../../utils/errors.js'
+import {
+  adminListMediaSchema,
+  adminReplaceMediaSchema,
+  adminDeleteMediaSchema,
+} from '../../schemas/index.js'
 
 export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -35,7 +42,7 @@ export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<vo
       type?: 'image' | 'video' | 'audio' | 'document'
       limit?: number
     }
-  }>('/api/admin/media', { preHandler: requireAuth }, async (request) => {
+  }>('/api/admin/media', { preHandler: requireAuth, schema: adminListMediaSchema }, async (request) => {
     const { type, limit } = request.query
 
     const media = listMedia(app.db, { type, limit })
@@ -51,9 +58,19 @@ export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<vo
     // Get uploaded file
     const data = await request.file()
     if (!data) {
-      return reply.code(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'No file provided' },
-      })
+      return errors.validation(reply, 'No file provided')
+    }
+
+    // Check type-specific size limit
+    const mediaType = getMediaType(data.mimetype)
+    const maxSize = getMaxSize(mediaType, app.config.media)
+    const buffer = await data.toBuffer()
+
+    if (buffer.length > maxSize) {
+      return errors.validation(
+        reply,
+        `File size (${formatBytes(buffer.length)}) exceeds ${mediaType} limit (${formatBytes(maxSize)})`
+      )
     }
 
     // Generate ID and save file
@@ -82,45 +99,56 @@ export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<vo
    */
   app.put<{
     Params: { id: string }
-  }>('/api/admin/media/:id/replace', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/media/:id/replace', { preHandler: requireAuth, schema: adminReplaceMediaSchema }, async (request, reply) => {
     const { id } = request.params
 
     const existing = getMediaById(app.db, id)
     if (!existing) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Media not found' },
-      })
+      return errors.notFound(reply, 'Media')
     }
 
     // Get uploaded file
     const data = await request.file()
     if (!data) {
-      return reply.code(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'No file provided' },
-      })
+      return errors.validation(reply, 'No file provided')
     }
 
-    // Delete old file
     const oldFilename = existing.url.replace('/uploads/', '')
-    await deleteFile(oldFilename)
+    let newFilename: string
 
-    // Save new file with same ID
-    const filename = await saveFile(data, id)
+    try {
+      // Save new file first
+      newFilename = await saveFile(data, id)
+    } catch (error) {
+      app.log.error(error, 'Failed to save replacement file')
+      return errors.internal(reply, 'Failed to save file')
+    }
 
-    // Extract metadata
-    const metadata = await getFileMetadata(data, filename)
+    try {
+      // Delete old file
+      await deleteFile(oldFilename)
+    } catch (error) {
+      // Log but don't fail - old file might already be gone
+      app.log.warn(error, `Failed to delete old media file: ${oldFilename}`)
+    }
 
-    // Update database record
-    replaceMedia(app.db, id, {
-      url: `/uploads/${filename}`,
-      mimeType: data.mimetype,
-      width: metadata.width,
-      height: metadata.height,
-      duration: metadata.duration,
-    })
+    try {
+      const metadata = await getFileMetadata(data, newFilename)
 
-    const updated = getMediaById(app.db, id)
-    return updated
+      replaceMedia(app.db, id, {
+        url: `/uploads/${newFilename}`,
+        mimeType: data.mimetype,
+        width: metadata.width,
+        height: metadata.height,
+        duration: metadata.duration,
+      })
+
+      const updated = getMediaById(app.db, id)
+      return updated
+    } catch (error) {
+      app.log.error(error, 'Failed to update media record')
+      return errors.internal(reply, 'Failed to update media')
+    }
   })
 
   /**
@@ -129,30 +157,31 @@ export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<vo
    */
   app.delete<{
     Params: { id: string }
-  }>('/api/admin/media/:id', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+  }>('/api/admin/media/:id', { preHandler: [requireAuth, requireOwner], schema: adminDeleteMediaSchema }, async (request, reply) => {
     const { id } = request.params
 
     const media = getMediaById(app.db, id)
     if (!media) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Media not found' },
-      })
+      return errors.notFound(reply, 'Media')
     }
 
     // Check if media is in use
     const references = getMediaReferences(app.db, id)
     if (references.length > 0) {
       // Warn but allow deletion (explicit deletion as per spec)
-      console.warn(`Warning: Deleting media ${id} which is referenced in ${references.length} locations`)
+      app.log.warn(`Deleting media ${id} which is referenced in ${references.length} locations`)
     }
 
-    // Delete file from disk
     const filename = media.url.replace('/uploads/', '')
-    await deleteFile(filename)
 
-    // Delete from database
-    deleteMedia(app.db, id)
-
-    return { ok: true }
+    try {
+      // Delete file first, then database record
+      await deleteFile(filename)
+      deleteMedia(app.db, id)
+      return { ok: true }
+    } catch (error) {
+      app.log.error(error, `Failed to delete media file: ${filename}`)
+      return errors.internal(reply, 'Failed to delete media file')
+    }
   })
 }

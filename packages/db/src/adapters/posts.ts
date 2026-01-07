@@ -358,28 +358,3 @@ export function deletePost(db: Database.Database, id: string): void {
   db.prepare('DELETE FROM posts WHERE id = ?').run(id)
 }
 
-/**
- * Check if slug is available for a post type in a language
- */
-export function isPostSlugAvailable(
-  db: Database.Database,
-  type: string,
-  slug: string,
-  language: string,
-  excludePostId?: string
-): boolean {
-  let query = `
-    SELECT pt.post_id FROM post_translations pt
-    JOIN posts p ON pt.post_id = p.id
-    WHERE p.type = ? AND pt.slug = ? AND pt.language = ?
-  `
-  const params: any[] = [type, slug, language]
-
-  if (excludePostId) {
-    query += ' AND pt.post_id != ?'
-    params.push(excludePostId)
-  }
-
-  const existing = db.prepare(query).get(...params)
-  return !existing
-}

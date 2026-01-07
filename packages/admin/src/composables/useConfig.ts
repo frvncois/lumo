@@ -1,31 +1,8 @@
 import { ref, readonly } from 'vue'
 import { api } from '../utils/api'
+import type { LumoConfig, PageSchema, PostTypeSchema } from '@lumo/core'
 
-interface Field {
-  key: string
-  type: 'text' | 'textarea' | 'richtext' | 'image' | 'gallery' | 'url' | 'boolean'
-  label: string
-  required: boolean
-}
-
-interface PageSchema {
-  slug: string
-  fields: Field[]
-}
-
-interface PostTypeSchema {
-  slug: string
-  name: string
-  nameSingular: string
-  fields: Field[]
-}
-
-interface Config {
-  languages: string[]
-  defaultLanguage: string
-  pages?: Record<string, PageSchema>
-  postTypes?: Record<string, PostTypeSchema>
-}
+type Config = LumoConfig
 
 const config = ref<Config | null>(null)
 const loading = ref(false)

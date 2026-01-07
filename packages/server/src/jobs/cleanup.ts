@@ -6,6 +6,7 @@
 
 import type Database from 'better-sqlite3'
 import { deleteExpiredPreviews } from '@lumo/db'
+import { CleanupConfig } from '../constants.js'
 
 /**
  * Delete expired preview snapshots
@@ -30,7 +31,15 @@ export function startCleanupScheduler(db: Database.Database): NodeJS.Timeout {
   // Then run every 10 minutes
   const interval = setInterval(() => {
     cleanupExpiredPreviews(db)
-  }, 10 * 60 * 1000) // 10 minutes in milliseconds
+  }, CleanupConfig.INTERVAL_MS)
 
   return interval
+}
+
+/**
+ * Stop the cleanup scheduler
+ */
+export function stopCleanupScheduler(interval: NodeJS.Timeout): void {
+  clearInterval(interval)
+  console.log('[Cleanup] Stopped cleanup scheduler')
 }

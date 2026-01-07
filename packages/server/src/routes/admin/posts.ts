@@ -25,6 +25,16 @@ import {
 import { validatePostTranslation } from '@lumo/core'
 import { generateId } from '../../utils/tokens.js'
 import type { TranslationContent, PostStatus, Post } from '@lumo/core'
+import { errors } from '../../utils/errors.js'
+import {
+  adminListPostsSchema,
+  adminGetPostByIdSchema,
+  adminCreatePostSchema,
+  adminUpdatePostSchema,
+  adminUpsertPostTranslationSchema,
+  adminDeletePostTranslationSchema,
+  adminDeletePostSchema,
+} from '../../schemas/index.js'
 
 export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -37,19 +47,15 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
       status?: string
       lang?: string
     }
-  }>('/api/admin/posts', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/posts', { preHandler: requireAuth, schema: adminListPostsSchema }, async (request, reply) => {
     const { type, status, lang } = request.query
 
     if (!type) {
-      return reply.code(400).send({
-        error: { code: 'VALIDATION_ERROR', message: 'Type parameter is required' },
-      })
+      return errors.validation(reply, 'Type parameter is required')
     }
 
     if (!app.config.postTypes?.[type]) {
-      return reply.code(400).send({
-        error: { code: 'VALIDATION_ERROR', message: `Post type "${type}" not found in config` },
-      })
+      return errors.validation(reply, `Post type "${type}" not found in config`)
     }
 
     const posts = listPosts(app.db, {
@@ -67,13 +73,11 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
    */
   app.get<{
     Params: { id: string }
-  }>('/api/admin/posts/:id', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/posts/:id', { preHandler: requireAuth, schema: adminGetPostByIdSchema }, async (request, reply) => {
     const post = getPostById(app.db, request.params.id)
 
     if (!post) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Post not found' },
-      })
+      return errors.notFound(reply, 'Post')
     }
 
     return post
@@ -90,13 +94,11 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
       publishedAt?: string | null
       position?: number | null
     }
-  }>('/api/admin/posts', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/posts', { preHandler: requireAuth, schema: adminCreatePostSchema }, async (request, reply) => {
     const { type, status = 'draft', publishedAt = null, position = null } = request.body
 
     if (!app.config.postTypes?.[type]) {
-      return reply.code(400).send({
-        error: { code: 'VALIDATION_ERROR', message: `Post type "${type}" not found in config` },
-      })
+      return errors.validation(reply, `Post type "${type}" not found in config`)
     }
 
     const postId = generateId('post')
@@ -123,15 +125,13 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
       publishedAt?: string | null
       position?: number | null
     }
-  }>('/api/admin/posts/:id', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/posts/:id', { preHandler: requireAuth, schema: adminUpdatePostSchema }, async (request, reply) => {
     const { id } = request.params
     const { status, publishedAt, position } = request.body
 
     const post = getPostById(app.db, id)
     if (!post) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Post not found' },
-      })
+      return errors.notFound(reply, 'Post')
     }
 
     updatePost(app.db, id, { status, publishedAt, position })
@@ -147,33 +147,33 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
   app.put<{
     Params: { id: string; lang: string }
     Body: TranslationContent
-  }>('/api/admin/posts/:id/translations/:lang', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/posts/:id/translations/:lang', { preHandler: requireAuth, schema: adminUpsertPostTranslationSchema }, async (request, reply) => {
     const { id, lang } = request.params
     const content = request.body
 
     const post = getPostById(app.db, id)
     if (!post) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Post not found' },
-      })
+      return errors.notFound(reply, 'Post')
     }
 
     // Validate translation
     const result = validatePostTranslation(post.type, lang, content, app.config)
     if (!result.success) {
-      return reply.code(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: 'Validation failed',
-          details: result.errors,
-        },
-      })
+      return errors.validation(reply, 'Validation failed', result.errors)
     }
 
-    upsertPostTranslation(app.db, id, lang, content)
-    const updated = getPostById(app.db, id)
-
-    return updated
+    // Attempt upsert - let database handle uniqueness
+    try {
+      upsertPostTranslation(app.db, id, lang, content)
+      const updated = getPostById(app.db, id)
+      return updated
+    } catch (error: any) {
+      // Handle unique constraint violation
+      if (error.code === 'SQLITE_CONSTRAINT_UNIQUE' || error.message?.includes('UNIQUE constraint failed')) {
+        return errors.conflict(reply, `Slug "${content.slug}" already exists for language "${lang}"`)
+      }
+      throw error
+    }
   })
 
   /**
@@ -182,30 +182,21 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
    */
   app.delete<{
     Params: { id: string; lang: string }
-  }>('/api/admin/posts/:id/translations/:lang', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+  }>('/api/admin/posts/:id/translations/:lang', { preHandler: [requireAuth, requireOwner], schema: adminDeletePostTranslationSchema }, async (request, reply) => {
     const { id, lang } = request.params
 
     // Cannot delete default language
     if (lang === app.config.defaultLanguage) {
-      return reply.code(403).send({
-        error: {
-          code: 'FORBIDDEN',
-          message: 'Cannot delete default language translation',
-        },
-      })
+      return errors.forbidden(reply, 'Cannot delete default language translation')
     }
 
     const post = getPostById(app.db, id)
     if (!post) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Post not found' },
-      })
+      return errors.notFound(reply, 'Post')
     }
 
     if (!post.translations[lang]) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Translation not found' },
-      })
+      return errors.notFound(reply, 'Translation')
     }
 
     deletePostTranslation(app.db, id, lang)
@@ -219,12 +210,10 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
    */
   app.delete<{
     Params: { id: string }
-  }>('/api/admin/posts/:id', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+  }>('/api/admin/posts/:id', { preHandler: [requireAuth, requireOwner], schema: adminDeletePostSchema }, async (request, reply) => {
     const post = getPostById(app.db, request.params.id)
     if (!post) {
-      return reply.code(404).send({
-        error: { code: 'NOT_FOUND', message: 'Post not found' },
-      })
+      return errors.notFound(reply, 'Post')
     }
 
     deletePost(app.db, request.params.id)

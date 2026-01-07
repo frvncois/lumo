@@ -4,15 +4,16 @@
 
 import { createApp } from './app.js'
 import { loadConfig } from './config.js'
-import { createDatabase } from '@lumo/db'
-import { startCleanupScheduler } from './jobs/cleanup.js'
+import { createDatabase, closeDatabase } from '@lumo/db'
+import { startCleanupScheduler, stopCleanupScheduler } from './jobs/cleanup.js'
 import { createConfigLoader, type ConfigLoader } from './config/loader.js'
+import { ServerDefaults } from './constants.js'
+import type Database from 'better-sqlite3'
 
-// Store cleanup interval for graceful shutdown
+// Track resources for cleanup
 let cleanupInterval: NodeJS.Timeout | null = null
-
-// Store config loader globally for reload access
-let globalConfigLoader: ConfigLoader | null = null
+let configLoader: ConfigLoader | null = null
+let database: Database.Database | null = null
 
 /**
  * Start server
@@ -28,53 +29,81 @@ async function start() {
     // Create database connection
     console.log('Connecting to database...')
     const dbPath = process.env.LUMO_DB_PATH || '../../lumo.db'
-    const db = createDatabase({
+    database = createDatabase({
       filename: dbPath,
     })
     console.log('Database connected')
 
     // Create config loader (merges file + database schemas)
     console.log('Loading schemas from database...')
-    const configLoader = createConfigLoader(fileConfig, db)
-    globalConfigLoader = configLoader
+    configLoader = createConfigLoader(fileConfig, database)
     const config = configLoader.getConfig()
     console.log('Configuration merged successfully')
 
     // Start cleanup scheduler
-    cleanupInterval = startCleanupScheduler(db)
+    cleanupInterval = startCleanupScheduler(database)
 
     // Create Fastify app
     console.log('Creating application...')
-    const app = await createApp({ config, db, configLoader })
+    const app = await createApp({ config, db: database, configLoader })
 
     // Start server
-    const port = parseInt(process.env.PORT || '3000', 10)
-    const host = process.env.HOST || '0.0.0.0'
+    const port = parseInt(process.env.PORT || String(ServerDefaults.PORT), 10)
+    const host = process.env.HOST || ServerDefaults.HOST
 
     await app.listen({ port, host })
 
     console.log(`Server listening on http://${host}:${port}`)
   } catch (error) {
     console.error('Failed to start server:', error)
+    await cleanup()
     process.exit(1)
   }
 }
 
-// Handle shutdown gracefully
-process.on('SIGINT', async () => {
-  console.log('Shutting down...')
+async function cleanup() {
+  console.log('Cleaning up resources...')
+
   if (cleanupInterval) {
-    clearInterval(cleanupInterval)
+    stopCleanupScheduler(cleanupInterval)
+    cleanupInterval = null
   }
+
+  if (configLoader) {
+    configLoader.dispose()
+    configLoader = null
+  }
+
+  if (database) {
+    closeDatabase(database)
+    database = null
+  }
+}
+
+// Graceful shutdown handlers
+process.on('SIGINT', async () => {
+  console.log('Received SIGINT, shutting down...')
+  await cleanup()
   process.exit(0)
 })
 
 process.on('SIGTERM', async () => {
-  console.log('Shutting down...')
-  if (cleanupInterval) {
-    clearInterval(cleanupInterval)
-  }
+  console.log('Received SIGTERM, shutting down...')
+  await cleanup()
   process.exit(0)
+})
+
+// Handle uncaught errors
+process.on('uncaughtException', async (error) => {
+  console.error('Uncaught exception:', error)
+  await cleanup()
+  process.exit(1)
+})
+
+process.on('unhandledRejection', async (reason) => {
+  console.error('Unhandled rejection:', reason)
+  await cleanup()
+  process.exit(1)
 })
 
 // Start the server
@@ -85,9 +114,9 @@ start()
  * Call this after making changes to schemas in the database
  */
 export function reloadConfig(): void {
-  if (!globalConfigLoader) {
+  if (!configLoader) {
     throw new Error('Config loader not initialized')
   }
-  globalConfigLoader.reload()
+  configLoader.reload()
   console.log('Configuration reloaded')
 }

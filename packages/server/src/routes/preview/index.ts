@@ -11,6 +11,8 @@ import { createPreview, getPreviewByToken } from '@lumo/db'
 import { validatePageTranslation, validatePostTranslation } from '@lumo/core'
 import { generateRandomToken, generateId } from '../../utils/tokens.js'
 import type { Fields, PreviewTargetType } from '@lumo/core'
+import { errors } from '../../utils/errors.js'
+import { previewCreateSchema, previewGetByTokenSchema } from '../../schemas/index.js'
 
 export async function registerPreviewRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -27,18 +29,13 @@ export async function registerPreviewRoutes(app: FastifyInstance): Promise<void>
       title: string
       fields: Fields
     }
-  }>('/api/admin/preview', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/admin/preview', { preHandler: requireAuth, schema: previewCreateSchema }, async (request, reply) => {
     const { user } = request as AuthenticatedRequest
     const { targetType, targetId, postType, language, slug, title, fields } = request.body
 
     // Validate language
     if (!app.config.languages.includes(language)) {
-      return reply.code(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: `Language "${language}" is not configured`,
-        },
-      })
+      return errors.validation(reply, `Language "${language}" is not configured`)
     }
 
     // Validate content based on target type
@@ -51,22 +48,11 @@ export async function registerPreviewRoutes(app: FastifyInstance): Promise<void>
         app.config
       )
       if (!result.success) {
-        return reply.code(400).send({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Validation failed',
-            details: result.errors,
-          },
-        })
+        return errors.validation(reply, 'Validation failed', result.errors)
       }
     } else if (targetType === 'post') {
       if (!postType) {
-        return reply.code(400).send({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'postType is required for post previews',
-          },
-        })
+        return errors.validation(reply, 'postType is required for post previews')
       }
 
       const result = validatePostTranslation(
@@ -76,13 +62,7 @@ export async function registerPreviewRoutes(app: FastifyInstance): Promise<void>
         app.config
       )
       if (!result.success) {
-        return reply.code(400).send({
-          error: {
-            code: 'VALIDATION_ERROR',
-            message: 'Validation failed',
-            details: result.errors,
-          },
-        })
+        return errors.validation(reply, 'Validation failed', result.errors)
       }
     }
 
@@ -126,18 +106,13 @@ export async function registerPreviewRoutes(app: FastifyInstance): Promise<void>
    */
   app.get<{
     Params: { token: string }
-  }>('/api/preview/:token', async (request, reply) => {
+  }>('/api/preview/:token', { schema: previewGetByTokenSchema }, async (request, reply) => {
     const { token } = request.params
 
     const preview = getPreviewByToken(app.db, token)
 
     if (!preview) {
-      return reply.code(404).send({
-        error: {
-          code: 'NOT_FOUND',
-          message: 'Preview not found or expired',
-        },
-      })
+      return errors.notFound(reply, 'Preview')
     }
 
     return {

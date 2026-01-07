@@ -8,6 +8,7 @@ import type { FastifyRequest, FastifyReply } from 'fastify'
 import { verifySessionToken } from '../utils/tokens.js'
 import { getUserWithRole } from '@lumo/db'
 import type { UserRole } from '@lumo/core'
+import { errors } from '../utils/errors.js'
 
 export interface AuthenticatedRequest extends FastifyRequest {
   user: {
@@ -24,35 +25,20 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
   const token = request.cookies.session
 
   if (!token) {
-    reply.code(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Authentication required',
-      },
-    })
+    errors.unauthorized(reply)
     return
   }
 
   const payload = verifySessionToken(token)
   if (!payload) {
-    reply.code(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'Invalid or expired session',
-      },
-    })
+    errors.unauthorized(reply, 'Invalid or expired session')
     return
   }
 
   // Get user from database
   const user = getUserWithRole(request.server.db, payload.userId)
   if (!user || !user.role) {
-    reply.code(401).send({
-      error: {
-        code: 'UNAUTHORIZED',
-        message: 'User not found or not a collaborator',
-      },
-    })
+    errors.unauthorized(reply, 'User not found or not a collaborator')
     return
   }
 

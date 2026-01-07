@@ -99,25 +99,7 @@ import { Card, CardHeader, CardContent, Button, List, ListItem } from '../ui'
 import SchemaModal from '../SchemaModal.vue'
 import { api } from '../../utils/api'
 import { useConfig } from '../../composables/useConfig'
-
-interface Field {
-  key: string
-  type: 'text' | 'textarea' | 'richtext' | 'image' | 'gallery' | 'url' | 'boolean'
-  label: string
-  required: boolean
-}
-
-interface PageSchema {
-  slug: string
-  fields: Field[]
-}
-
-interface PostTypeSchema {
-  slug: string
-  name: string
-  nameSingular: string
-  fields: Field[]
-}
+import type { Field, PageSchema, PostTypeSchema } from '@lumo/core'
 
 const { refresh: refreshConfig } = useConfig()
 

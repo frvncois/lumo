@@ -216,23 +216,3 @@ export function deletePage(db: Database.Database, id: string): void {
   db.prepare('DELETE FROM pages WHERE id = ?').run(id)
 }
 
-/**
- * Check if slug is available for a page in a language
- */
-export function isPageSlugAvailable(
-  db: Database.Database,
-  slug: string,
-  language: string,
-  excludePageId?: string
-): boolean {
-  let query = 'SELECT page_id FROM page_translations WHERE slug = ? AND language = ?'
-  const params: any[] = [slug, language]
-
-  if (excludePageId) {
-    query += ' AND page_id != ?'
-    params.push(excludePageId)
-  }
-
-  const existing = db.prepare(query).get(...params)
-  return !existing
-}

@@ -34,7 +34,6 @@ export {
   upsertPageTranslation,
   deletePageTranslation,
   deletePage,
-  isPageSlugAvailable,
 } from './adapters/pages.js'
 
 // Posts Adapter
@@ -48,7 +47,6 @@ export {
   upsertPostTranslation,
   deletePostTranslation,
   deletePost,
-  isPostSlugAvailable,
 } from './adapters/posts.js'
 export type { CreatePostData, UpdatePostData, ListPostsOptions } from './adapters/posts.js'
 
@@ -133,3 +131,11 @@ export {
   migratePageTranslations,
   migratePostTranslations,
 } from './adapters/field-migrations.js'
+
+// Transaction Utilities
+export {
+  withTransaction,
+  beginTransaction,
+  commitTransaction,
+  rollbackTransaction,
+} from './utils/transaction.js'

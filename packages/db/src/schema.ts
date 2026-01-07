@@ -82,7 +82,8 @@ function createPostsTables(db: Database.Database): void {
       updated_at DATETIME NOT NULL,
 
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-      UNIQUE (post_id, language)
+      UNIQUE (post_id, language),
+      UNIQUE (language, slug)
     );
   `)
 }

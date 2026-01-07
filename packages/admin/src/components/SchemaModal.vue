@@ -102,25 +102,7 @@
 import { ref, reactive, watch } from 'vue'
 import draggable from 'vuedraggable'
 import FieldRow from './FieldRow.vue'
-
-interface Field {
-  key: string
-  type: string
-  label: string
-  required: boolean
-}
-
-interface PageSchema {
-  slug?: string
-  fields: Field[]
-}
-
-interface PostTypeSchema {
-  slug?: string
-  name?: string
-  nameSingular?: string
-  fields: Field[]
-}
+import type { Field, PageSchema, PostTypeSchema } from '@lumo/core'
 
 const props = defineProps<{
   type: 'page' | 'postType'

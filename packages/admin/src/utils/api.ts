@@ -4,33 +4,12 @@
  * Handles all HTTP requests to the LUMO API server.
  */
 
+import type { Field, PageSchema, PostTypeSchema, ValidationErrorDetail } from '@lumo/core'
+
 interface ApiError {
   code: string
   message: string
-  details?: Array<{ path: string; reason: string; message?: string }>
-}
-
-interface Field {
-  key: string
-  type: 'text' | 'textarea' | 'richtext' | 'image' | 'gallery' | 'url' | 'boolean'
-  label: string
-  required: boolean
-}
-
-interface PageSchema {
-  slug: string
-  fields: Field[]
-  source?: 'file' | 'database'
-  locked?: boolean
-}
-
-interface PostTypeSchema {
-  slug: string
-  name: string
-  nameSingular: string
-  fields: Field[]
-  source?: 'file' | 'database'
-  locked?: boolean
+  details?: ValidationErrorDetail[]
 }
 
 class ApiClient {

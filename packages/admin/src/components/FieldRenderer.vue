@@ -96,14 +96,7 @@ import { defineProps, defineEmits } from 'vue'
 import RichtextEditor from './RichtextEditor.vue'
 import ImageField from './ImageField.vue'
 import { Input, Textarea, Button } from './ui'
-
-interface Field {
-  key: string
-  type: 'text' | 'textarea' | 'richtext' | 'image' | 'gallery' | 'url' | 'boolean'
-  label?: string
-  placeholder?: string
-  required?: boolean
-}
+import type { Field } from '@lumo/core'
 
 const props = defineProps<{
   field: Field

@@ -5,18 +5,10 @@
  */
 
 import bcrypt from 'bcrypt'
+import { PasswordConfig } from '../constants.js'
 
-/**
- * Bcrypt cost factor (number of rounds)
- * Higher values = more secure but slower
- * 12 is a good balance for production
- */
-const SALT_ROUNDS = 12
-
-/**
- * Password validation rules
- */
-const MIN_PASSWORD_LENGTH = 8
+const SALT_ROUNDS = PasswordConfig.BCRYPT_ROUNDS
+const MIN_PASSWORD_LENGTH = PasswordConfig.MIN_LENGTH
 
 /**
  * Validation result

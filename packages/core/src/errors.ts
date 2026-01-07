@@ -7,9 +7,11 @@
 import type { ValidationErrorDetail } from './types.js'
 
 /**
- * Base Error Codes
+ * Error Codes
+ * Includes both validation and API error codes
  */
 export const ErrorCodes = {
+  // Validation errors
   VALIDATION_ERROR: 'VALIDATION_ERROR',
   SCHEMA_INVALID: 'SCHEMA_INVALID',
   REQUIRED_FIELD_MISSING: 'REQUIRED_FIELD_MISSING',
@@ -25,6 +27,15 @@ export const ErrorCodes = {
   INVALID_POST_TYPE: 'INVALID_POST_TYPE',
   PUBLISHED_WITHOUT_DATE: 'PUBLISHED_WITHOUT_DATE',
   TOO_MANY_FIELDS: 'TOO_MANY_FIELDS',
+
+  // API errors
+  NOT_FOUND: 'NOT_FOUND',
+  UNAUTHORIZED: 'UNAUTHORIZED',
+  FORBIDDEN: 'FORBIDDEN',
+  CONFLICT: 'CONFLICT',
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  INVALID_CREDENTIALS: 'INVALID_CREDENTIALS',
+  SCHEMA_NOT_FOUND: 'SCHEMA_NOT_FOUND',
 } as const
 
 export type ErrorCode = (typeof ErrorCodes)[keyof typeof ErrorCodes]

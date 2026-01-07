@@ -7,6 +7,7 @@ import cookie from '@fastify/cookie'
 import multipart from '@fastify/multipart'
 import staticFiles from '@fastify/static'
 import cors from '@fastify/cors'
+import rateLimit from '@fastify/rate-limit'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { LumoConfig } from '@lumo/core'
@@ -53,6 +54,48 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: process.env.CORS_ORIGIN || '*',
     credentials: true,
+  })
+
+  // Register rate limiting
+  await app.register(rateLimit, {
+    global: true,
+    max: 100,
+    timeWindow: '1 minute',
+    keyGenerator: (request) => {
+      const user = (request as any).user
+      return user?.id || request.ip
+    },
+    errorResponseBuilder: (_request, context) => ({
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Too many requests. Retry in ${Math.ceil(context.ttl / 1000)} seconds.`,
+      },
+    }),
+  })
+
+  // Error handler for validation errors
+  app.setErrorHandler((error: any, request, reply) => {
+    if (error.validation) {
+      return reply.code(400).send({
+        error: {
+          code: 'VALIDATION_ERROR',
+          message: 'Request validation failed',
+          details: error.validation.map((v: any) => ({
+            path: v.instancePath || v.params?.missingProperty || 'body',
+            reason: v.keyword,
+            message: v.message,
+          })),
+        },
+      })
+    }
+
+    app.log.error(error)
+    return reply.code(error.statusCode || 500).send({
+      error: {
+        code: 'INTERNAL_ERROR',
+        message: process.env.NODE_ENV === 'production' ? 'Internal server error' : (error.message || 'Internal server error'),
+      },
+    })
   })
 
   // Register static file serving for uploads

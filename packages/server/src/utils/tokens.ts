@@ -15,12 +15,6 @@ export interface SessionPayload {
   expiresAt: number
 }
 
-export interface MagicLinkPayload {
-  email: string
-  issuedAt: number
-  expiresAt: number
-}
-
 /**
  * Sign a payload to create a token
  */
@@ -79,27 +73,6 @@ export function createSessionToken(userId: string, role: 'owner' | 'editor'): st
  */
 export function verifySessionToken(token: string): SessionPayload | null {
   return verifyToken<SessionPayload>(token)
-}
-
-/**
- * Create magic link token
- */
-export function createMagicLinkToken(email: string): string {
-  const now = Date.now()
-  const payload: MagicLinkPayload = {
-    email,
-    issuedAt: now,
-    expiresAt: now + 15 * 60 * 1000, // 15 minutes
-  }
-
-  return signToken(payload)
-}
-
-/**
- * Verify magic link token
- */
-export function verifyMagicLinkToken(token: string): MagicLinkPayload | null {
-  return verifyToken<MagicLinkPayload>(token)
 }
 
 /**

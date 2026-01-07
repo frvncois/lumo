@@ -13,6 +13,7 @@ export interface ConfigLoader {
   load(): LumoConfig
   reload(): LumoConfig
   getConfig(): LumoConfig
+  dispose(): void
 }
 
 /**
@@ -73,8 +74,13 @@ export function createConfigLoader(
     return currentConfig
   }
 
+  function dispose(): void {
+    // Clear cached config to free memory
+    currentConfig = null as any
+  }
+
   // Initial load
   load()
 
-  return { load, reload, getConfig }
+  return { load, reload, getConfig, dispose }
 }

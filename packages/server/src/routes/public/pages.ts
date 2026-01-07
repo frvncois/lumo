@@ -7,6 +7,8 @@
 
 import type { FastifyInstance } from 'fastify'
 import { getPageBySlug } from '@lumo/db'
+import { errors } from '../../utils/errors.js'
+import { publicListPagesSchema, publicGetPageBySlugSchema } from '../../schemas/index.js'
 
 export async function registerPublicPagesRoutes(app: FastifyInstance): Promise<void> {
   /**
@@ -15,17 +17,12 @@ export async function registerPublicPagesRoutes(app: FastifyInstance): Promise<v
    */
   app.get<{
     Querystring: { lang?: string }
-  }>('/api/pages', async (request, reply) => {
+  }>('/api/pages', { schema: publicListPagesSchema }, async (request, reply) => {
     const language = request.query.lang || app.config.defaultLanguage
 
     // Validate language
     if (!app.config.languages.includes(language)) {
-      return reply.code(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: `Language "${language}" is not configured`,
-        },
-      })
+      return errors.validation(reply, `Language "${language}" is not configured`)
     }
 
     // Get all pages
@@ -58,29 +55,19 @@ export async function registerPublicPagesRoutes(app: FastifyInstance): Promise<v
   app.get<{
     Params: { slug: string }
     Querystring: { lang?: string }
-  }>('/api/pages/:slug', async (request, reply) => {
+  }>('/api/pages/:slug', { schema: publicGetPageBySlugSchema }, async (request, reply) => {
     const { slug } = request.params
     const language = request.query.lang || app.config.defaultLanguage
 
     // Validate language
     if (!app.config.languages.includes(language)) {
-      return reply.code(400).send({
-        error: {
-          code: 'VALIDATION_ERROR',
-          message: `Language "${language}" is not configured`,
-        },
-      })
+      return errors.validation(reply, `Language "${language}" is not configured`)
     }
 
     const page = getPageBySlug(app.db, slug, language)
 
     if (!page || !page.translations[language]) {
-      return reply.code(404).send({
-        error: {
-          code: 'NOT_FOUND',
-          message: `Page not found`,
-        },
-      })
+      return errors.notFound(reply, 'Page')
     }
 
     const translation = page.translations[language]

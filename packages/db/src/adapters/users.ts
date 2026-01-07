@@ -79,10 +79,34 @@ export function getUserWithRole(db: Database.Database, id: string): UserWithRole
 }
 
 /**
- * Update user password
+ * Update user password and set password_changed_at
  */
-export function updatePassword(db: Database.Database, userId: string, passwordHash: string): void {
-  db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId)
+export function updatePassword(
+  db: Database.Database,
+  userId: string,
+  passwordHash: string
+): void {
+  const now = new Date().toISOString()
+  db.prepare(`
+    UPDATE users
+    SET password_hash = ?, password_changed_at = ?
+    WHERE id = ?
+  `).run(passwordHash, now, userId)
+}
+
+/**
+ * Get password changed timestamp
+ */
+export function getPasswordChangedAt(
+  db: Database.Database,
+  userId: string
+): string | null {
+  const row = db
+    .prepare<[string], { password_changed_at: string | null }>(
+      'SELECT password_changed_at FROM users WHERE id = ?'
+    )
+    .get(userId)
+  return row?.password_changed_at ?? null
 }
 
 /**

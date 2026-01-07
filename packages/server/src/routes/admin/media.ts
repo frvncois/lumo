@@ -24,7 +24,7 @@ import {
   deleteFile,
   getFileMetadata,
 } from '../../utils/media.js'
-import { getMediaType, getMaxSize, formatBytes, validateFileMimeType } from '../../utils/fileValidation.js'
+import { getMediaType, getMaxSize, formatBytes, validateFileUpload } from '../../utils/fileValidation.js'
 import { errors } from '../../utils/errors.js'
 import {
   adminListMediaSchema,
@@ -61,15 +61,14 @@ export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<vo
       return errors.validation(reply, 'No file provided')
     }
 
-    // Check type-specific size limit
-    const mediaType = getMediaType(data.mimetype)
-
-    // Validate MIME type
-    const mimeValidation = validateFileMimeType(data.mimetype, mediaType)
-    if (!mimeValidation.valid) {
-      return errors.validation(reply, mimeValidation.error!)
+    // Validate file upload (MIME type and extension)
+    const validation = validateFileUpload(data.mimetype, data.filename)
+    if (!validation.valid) {
+      return errors.validation(reply, validation.error!)
     }
 
+    // Check type-specific size limit
+    const mediaType = getMediaType(data.mimetype)
     const maxSize = getMaxSize(mediaType, app.config.media)
     const buffer = await data.toBuffer()
 

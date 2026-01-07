@@ -5,6 +5,7 @@
  */
 
 import Database from 'better-sqlite3'
+import fs from 'node:fs'
 import { initializeSchema } from './schema.js'
 
 /**
@@ -34,6 +35,15 @@ export function createDatabase(options: DatabaseOptions): Database.Database {
   }
 
   const db = new Database(options.filename, dbOptions)
+
+  // Set restrictive file permissions (owner read/write only)
+  if (options.filename !== ':memory:') {
+    try {
+      fs.chmodSync(options.filename, 0o600)
+    } catch (err) {
+      console.warn(`Warning: Could not set database file permissions: ${err}`)
+    }
+  }
 
   // Initialize schema if not readonly
   if (!options.readonly) {

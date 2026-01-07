@@ -16,18 +16,29 @@ class ApiClient {
   private baseUrl = '/api'
 
   async request<T>(url: string, options: RequestInit = {}): Promise<T> {
-    // Only set Content-Type if there's a body
     const headers: Record<string, string> = {
-      ...options.headers,
+      ...(options.headers as Record<string, string>),
     }
 
     if (options.body) {
       headers['Content-Type'] = 'application/json'
     }
 
+    // Add CSRF token for mutations
+    if (options.method && !['GET', 'HEAD', 'OPTIONS'].includes(options.method)) {
+      const csrfToken = document.cookie
+        .split('; ')
+        .find(row => row.startsWith('csrf='))
+        ?.split('=')[1]
+
+      if (csrfToken) {
+        headers['x-csrf-token'] = csrfToken
+      }
+    }
+
     const response = await fetch(`${this.baseUrl}${url}`, {
       ...options,
-      credentials: 'include', // Include cookies
+      credentials: 'include',
       headers,
     })
 

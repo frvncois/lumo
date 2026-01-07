@@ -11,132 +11,88 @@ import type Database from 'better-sqlite3'
  * Initialize database schema
  */
 export function initializeSchema(db: Database.Database): void {
-  // Enable foreign keys
-  db.pragma('foreign_keys = ON')
-
-  // Create tables
-  createPagesTables(db)
-  createPostsTables(db)
-  createSchemasTables(db)
-  createMediaTable(db)
-  createPreviewsTable(db)
-  createUsersTables(db)
-
-  // Create indexes
-  createIndexes(db)
-}
-
-/**
- * Create pages tables
- */
-function createPagesTables(db: Database.Database): void {
   db.exec(`
+    -- Page schemas (managed by owners)
+    CREATE TABLE IF NOT EXISTS page_schemas (
+      slug TEXT PRIMARY KEY,
+      fields TEXT NOT NULL, -- JSON array of field definitions
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Post type schemas (managed by owners)
+    CREATE TABLE IF NOT EXISTS post_type_schemas (
+      slug TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      name_singular TEXT NOT NULL,
+      fields TEXT NOT NULL, -- JSON array of field definitions
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Pages
     CREATE TABLE IF NOT EXISTS pages (
       id TEXT PRIMARY KEY,
-      created_at DATETIME NOT NULL,
-      updated_at DATETIME NOT NULL
+      schema_slug TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (schema_slug) REFERENCES page_schemas(slug)
     );
-  `)
 
-  db.exec(`
+    -- Page translations
     CREATE TABLE IF NOT EXISTS page_translations (
-      id TEXT PRIMARY KEY,
       page_id TEXT NOT NULL,
       language TEXT NOT NULL,
       slug TEXT NOT NULL,
-      title TEXT NOT NULL,
-      fields TEXT NOT NULL,
-      updated_at DATETIME NOT NULL,
-
-      FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE,
-      UNIQUE (page_id, language),
-      UNIQUE (language, slug)
+      content TEXT NOT NULL, -- JSON object with title and fields
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (page_id, language),
+      FOREIGN KEY (page_id) REFERENCES pages(id) ON DELETE CASCADE
     );
-  `)
-}
 
-/**
- * Create posts tables
- */
-function createPostsTables(db: Database.Database): void {
-  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_page_translation_slug ON page_translations(slug, language);
+
+    -- Posts
     CREATE TABLE IF NOT EXISTS posts (
       id TEXT PRIMARY KEY,
       type TEXT NOT NULL,
-      status TEXT NOT NULL CHECK (status IN ('draft', 'published')),
+      status TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft', 'published')),
       position INTEGER,
-      published_at DATETIME,
-      created_at DATETIME NOT NULL,
-      updated_at DATETIME NOT NULL
+      published_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (type) REFERENCES post_type_schemas(slug)
     );
-  `)
 
-  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_post_type ON posts(type);
+    CREATE INDEX IF NOT EXISTS idx_post_status ON posts(status);
+
+    -- Post translations
     CREATE TABLE IF NOT EXISTS post_translations (
-      id TEXT PRIMARY KEY,
       post_id TEXT NOT NULL,
       language TEXT NOT NULL,
       slug TEXT NOT NULL,
-      title TEXT NOT NULL,
-      fields TEXT NOT NULL,
-      updated_at DATETIME NOT NULL,
-
-      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE,
-      UNIQUE (post_id, language),
-      UNIQUE (language, slug)
+      content TEXT NOT NULL, -- JSON object with title and fields
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      PRIMARY KEY (post_id, language),
+      FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
     );
-  `)
-}
 
-/**
- * Create schemas tables
- */
-function createSchemasTables(db: Database.Database): void {
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS page_schemas (
-      id TEXT PRIMARY KEY,
-      slug TEXT NOT NULL UNIQUE,
-      fields TEXT NOT NULL,
-      created_at DATETIME NOT NULL,
-      updated_at DATETIME NOT NULL
-    );
-  `)
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_post_slug_unique ON post_translations(slug, language, (SELECT type FROM posts WHERE id = post_id));
+    CREATE INDEX IF NOT EXISTS idx_post_translation_slug ON post_translations(slug, language);
 
-  db.exec(`
-    CREATE TABLE IF NOT EXISTS post_type_schemas (
-      id TEXT PRIMARY KEY,
-      slug TEXT NOT NULL UNIQUE,
-      name TEXT NOT NULL,
-      name_singular TEXT NOT NULL,
-      fields TEXT NOT NULL,
-      created_at DATETIME NOT NULL,
-      updated_at DATETIME NOT NULL
-    );
-  `)
-}
-
-/**
- * Create media table
- */
-function createMediaTable(db: Database.Database): void {
-  db.exec(`
+    -- Media
     CREATE TABLE IF NOT EXISTS media (
       id TEXT PRIMARY KEY,
       url TEXT NOT NULL,
       mime_type TEXT NOT NULL,
       width INTEGER,
       height INTEGER,
-      duration INTEGER,
-      created_at DATETIME NOT NULL
+      duration REAL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `)
-}
 
-/**
- * Create previews table
- */
-function createPreviewsTable(db: Database.Database): void {
-  db.exec(`
+    -- Previews
     CREATE TABLE IF NOT EXISTS previews (
       id TEXT PRIMARY KEY,
       token TEXT NOT NULL UNIQUE,
@@ -146,89 +102,46 @@ function createPreviewsTable(db: Database.Database): void {
       language TEXT NOT NULL,
       slug TEXT NOT NULL,
       title TEXT NOT NULL,
-      fields TEXT NOT NULL,
+      fields TEXT NOT NULL, -- JSON object
       created_by TEXT NOT NULL,
-      expires_at DATETIME NOT NULL,
-      created_at DATETIME NOT NULL,
-
-      FOREIGN KEY (created_by) REFERENCES users(id) ON DELETE CASCADE
+      expires_at TEXT NOT NULL,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (created_by) REFERENCES users(id)
     );
-  `)
-}
 
-/**
- * Create users tables
- */
-function createUsersTables(db: Database.Database): void {
-  db.exec(`
+    CREATE INDEX IF NOT EXISTS idx_preview_token ON previews(token);
+    CREATE INDEX IF NOT EXISTS idx_preview_expires ON previews(expires_at);
+
+    -- Users
     CREATE TABLE IF NOT EXISTS users (
       id TEXT PRIMARY KEY,
       email TEXT NOT NULL UNIQUE,
       password_hash TEXT,
-      created_at DATETIME NOT NULL
+      password_changed_at TEXT,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
-  `)
 
-  db.exec(`
+    -- Collaborators
     CREATE TABLE IF NOT EXISTS collaborators (
       id TEXT PRIMARY KEY,
-      user_id TEXT NOT NULL,
+      user_id TEXT NOT NULL UNIQUE,
       role TEXT NOT NULL CHECK (role IN ('owner', 'editor')),
-      created_at DATETIME NOT NULL,
-
-      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE,
-      UNIQUE (user_id)
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
     );
-  `)
-}
 
-/**
- * Create indexes
- */
-function createIndexes(db: Database.Database): void {
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_page_translations_page_id
-      ON page_translations(page_id);
-  `)
+    CREATE INDEX IF NOT EXISTS idx_collaborator_role ON collaborators(role);
 
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_post_translations_post_id
-      ON post_translations(post_id);
-  `)
+    -- Settings
+    CREATE TABLE IF NOT EXISTS settings (
+      key TEXT PRIMARY KEY,
+      value TEXT NOT NULL,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
 
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_posts_type
-      ON posts(type);
-  `)
-
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_posts_status
-      ON posts(status);
-  `)
-
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_posts_position
-      ON posts(position);
-  `)
-
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_posts_published_at
-      ON posts(published_at);
-  `)
-
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_media_mime_type
-      ON media(mime_type);
-  `)
-
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_previews_token
-      ON previews(token);
-  `)
-
-  db.exec(`
-    CREATE INDEX IF NOT EXISTS idx_previews_expires_at
-      ON previews(expires_at);
+    -- Insert default settings if not exist
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('languages', '["en"]');
+    INSERT OR IGNORE INTO settings (key, value) VALUES ('defaultLanguage', '"en"');
   `)
 }
 
@@ -237,15 +150,16 @@ function createIndexes(db: Database.Database): void {
  */
 export function dropSchema(db: Database.Database): void {
   db.exec(`
+    DROP TABLE IF EXISTS settings;
     DROP TABLE IF EXISTS collaborators;
     DROP TABLE IF EXISTS users;
     DROP TABLE IF EXISTS previews;
     DROP TABLE IF EXISTS media;
-    DROP TABLE IF EXISTS post_type_schemas;
-    DROP TABLE IF EXISTS page_schemas;
     DROP TABLE IF EXISTS post_translations;
     DROP TABLE IF EXISTS posts;
+    DROP TABLE IF EXISTS post_type_schemas;
     DROP TABLE IF EXISTS page_translations;
     DROP TABLE IF EXISTS pages;
+    DROP TABLE IF EXISTS page_schemas;
   `)
 }

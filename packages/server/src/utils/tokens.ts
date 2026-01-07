@@ -17,6 +17,7 @@ export interface SessionPayload {
   role: 'owner' | 'editor'
   issuedAt: number
   expiresAt: number
+  passwordChangedAt?: string
 }
 
 /**
@@ -60,13 +61,18 @@ export function verifyToken<T = Record<string, any>>(token: string): T | null {
 /**
  * Create session token
  */
-export function createSessionToken(userId: string, role: 'owner' | 'editor'): string {
+export function createSessionToken(
+  userId: string,
+  role: 'owner' | 'editor',
+  passwordChangedAt?: string
+): string {
   const now = Date.now()
   const payload: SessionPayload = {
     userId,
     role,
     issuedAt: now,
     expiresAt: now + 7 * 24 * 60 * 60 * 1000, // 7 days
+    passwordChangedAt,
   }
 
   return signToken(payload)

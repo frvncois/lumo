@@ -79,6 +79,7 @@ export {
   getUserByEmail,
   getUserWithRole,
   updatePassword,
+  getPasswordChangedAt,
   hasAnyUsers,
   deleteUser,
   listUsers,

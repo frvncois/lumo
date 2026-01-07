@@ -159,7 +159,7 @@ export function listPosts(
   } else if (order === 'date_desc') {
     query += ' ORDER BY published_at DESC'
   } else if (order === 'position_asc') {
-    query += ' ORDER BY position ASC NULLS LAST'
+    query += ' ORDER BY CASE WHEN position IS NULL THEN 1 ELSE 0 END, position ASC'
   }
 
   query += ' LIMIT ? OFFSET ?'
@@ -216,7 +216,7 @@ export function listPublishedPosts(
   } else if (order === 'date_desc') {
     query += ' ORDER BY p.published_at DESC'
   } else if (order === 'position_asc') {
-    query += ' ORDER BY p.position ASC NULLS LAST'
+    query += ' ORDER BY CASE WHEN p.position IS NULL THEN 1 ELSE 0 END, p.position ASC'
   }
 
   query += ' LIMIT ? OFFSET ?'

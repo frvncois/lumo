@@ -62,54 +62,45 @@ export function migrateContentFieldKeys(
 }
 
 /**
- * Migrate page translation content
+ * Migrate page translations for a specific schema
+ * Only updates pages that belong to the given schema
  */
 export function migratePageTranslations(
   db: Database.Database,
   pageSchemaSlug: string,
   keyChanges: Map<string, string>
 ): number {
-  if (keyChanges.size === 0) {
-    return 0
-  }
+  if (keyChanges.size === 0) return 0
 
-  // Get all page translations
+  // Get only pages that belong to this schema
+  const pages = db
+    .prepare<[string], { id: string }>('SELECT id FROM pages WHERE schema_slug = ?')
+    .all(pageSchemaSlug)
+
+  if (pages.length === 0) return 0
+
+  const pageIds = pages.map(p => p.id)
+  const placeholders = pageIds.map(() => '?').join(',')
+
+  // Get translations only for pages with this schema
   const translations = db
-    .prepare<[], { page_id: string; language: string; content: string }>(
-      'SELECT page_id, language, content FROM page_translations'
+    .prepare<string[], { page_id: string; language: string; content: string }>(
+      `SELECT page_id, language, content FROM page_translations WHERE page_id IN (${placeholders})`
     )
-    .all()
-
-  const updateStmt = db.prepare(`
-    UPDATE page_translations
-    SET content = ?, updated_at = ?
-    WHERE page_id = ? AND language = ?
-  `)
+    .all(...pageIds)
 
   let migratedCount = 0
-  const now = new Date().toISOString()
 
   for (const translation of translations) {
-    try {
-      const content = JSON.parse(translation.content)
-      const migratedContent = migrateContentFieldKeys(content, keyChanges)
+    const content = JSON.parse(translation.content)
+    const migratedFields = migrateContentFieldKeys(content.fields || {}, keyChanges)
 
-      // Only update if content actually changed
-      if (JSON.stringify(content.fields) !== JSON.stringify(migratedContent.fields)) {
-        console.log(`[Migration] Migrating page ${translation.page_id} (${translation.language}):`, {
-          before: content.fields,
-          after: migratedContent.fields
-        })
-        updateStmt.run(
-          JSON.stringify(migratedContent),
-          now,
-          translation.page_id,
-          translation.language
-        )
-        migratedCount++
-      }
-    } catch (error) {
-      console.error(`[Migration] Error migrating page translation ${translation.page_id}:`, error)
+    if (JSON.stringify(migratedFields) !== JSON.stringify(content.fields || {})) {
+      const newContent = JSON.stringify({ ...content, fields: migratedFields })
+      db.prepare(
+        'UPDATE page_translations SET content = ?, updated_at = ? WHERE page_id = ? AND language = ?'
+      ).run(newContent, new Date().toISOString(), translation.page_id, translation.language)
+      migratedCount++
     }
   }
 
@@ -117,60 +108,45 @@ export function migratePageTranslations(
 }
 
 /**
- * Migrate post translation content for a specific post type
+ * Migrate post translations for a specific post type
+ * Only updates posts that belong to the given post type
  */
 export function migratePostTranslations(
   db: Database.Database,
   postTypeSlug: string,
   keyChanges: Map<string, string>
 ): number {
-  if (keyChanges.size === 0) {
-    return 0
-  }
+  if (keyChanges.size === 0) return 0
 
-  // Get all post translations for posts of this type
-  const translations = db
-    .prepare<
-      [string],
-      { post_id: string; language: string; content: string }
-    >(
-      `SELECT pt.post_id, pt.language, pt.content
-       FROM post_translations pt
-       JOIN posts p ON p.id = pt.post_id
-       WHERE p.type = ?`
-    )
+  // Get only posts that belong to this type
+  const posts = db
+    .prepare<[string], { id: string }>('SELECT id FROM posts WHERE type = ?')
     .all(postTypeSlug)
 
-  const updateStmt = db.prepare(`
-    UPDATE post_translations
-    SET content = ?, updated_at = ?
-    WHERE post_id = ? AND language = ?
-  `)
+  if (posts.length === 0) return 0
+
+  const postIds = posts.map(p => p.id)
+  const placeholders = postIds.map(() => '?').join(',')
+
+  // Get translations only for posts with this type
+  const translations = db
+    .prepare<string[], { post_id: string; language: string; content: string }>(
+      `SELECT post_id, language, content FROM post_translations WHERE post_id IN (${placeholders})`
+    )
+    .all(...postIds)
 
   let migratedCount = 0
-  const now = new Date().toISOString()
 
   for (const translation of translations) {
-    try {
-      const content = JSON.parse(translation.content)
-      const migratedContent = migrateContentFieldKeys(content, keyChanges)
+    const content = JSON.parse(translation.content)
+    const migratedFields = migrateContentFieldKeys(content.fields || {}, keyChanges)
 
-      // Only update if content actually changed
-      if (JSON.stringify(content.fields) !== JSON.stringify(migratedContent.fields)) {
-        console.log(`[Migration] Migrating post ${translation.post_id} (${translation.language}):`, {
-          before: content.fields,
-          after: migratedContent.fields
-        })
-        updateStmt.run(
-          JSON.stringify(migratedContent),
-          now,
-          translation.post_id,
-          translation.language
-        )
-        migratedCount++
-      }
-    } catch (error) {
-      console.error(`[Migration] Error migrating post translation ${translation.post_id}:`, error)
+    if (JSON.stringify(migratedFields) !== JSON.stringify(content.fields || {})) {
+      const newContent = JSON.stringify({ ...content, fields: migratedFields })
+      db.prepare(
+        'UPDATE post_translations SET content = ?, updated_at = ? WHERE post_id = ? AND language = ?'
+      ).run(newContent, new Date().toISOString(), translation.post_id, translation.language)
+      migratedCount++
     }
   }
 

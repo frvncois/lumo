@@ -6,7 +6,7 @@
 
 import type { FastifyRequest, FastifyReply } from 'fastify'
 import { verifySessionToken } from '../utils/tokens.js'
-import { getUserWithRole } from '@lumo/db'
+import { getUserWithRole, getPasswordChangedAt } from '@lumo/db'
 import type { UserRole } from '@lumo/core'
 import { errors } from '../utils/errors.js'
 
@@ -42,7 +42,19 @@ export async function requireAuth(request: FastifyRequest, reply: FastifyReply):
     return
   }
 
-  // Attach user to request
+  // Check if password was changed after token was issued
+  const passwordChangedAt = getPasswordChangedAt(request.server.db, payload.userId)
+  if (passwordChangedAt && payload.passwordChangedAt !== passwordChangedAt) {
+    errors.unauthorized(reply, 'Session invalidated due to password change')
+    return
+  }
+
+  // Verify role hasn't changed
+  if (user.role !== payload.role) {
+    errors.unauthorized(reply, 'Session invalidated due to role change')
+    return
+  }
+
   ;(request as AuthenticatedRequest).user = {
     id: user.id,
     email: user.email,

@@ -128,41 +128,47 @@ export function getMediaReferences(
 ): Array<{ type: 'page' | 'post'; id: string; language: string }> {
   const references: Array<{ type: 'page' | 'post'; id: string; language: string }> = []
 
-  // Check page translations
+  // Check page translations (use LIKE filter first for efficiency)
   const pageTranslations = db
-    .prepare<[], { page_id: string; language: string; content: string }>(
-      'SELECT page_id, language, content FROM page_translations'
+    .prepare<[string], { page_id: string; language: string; content: string }>(
+      'SELECT page_id, language, content FROM page_translations WHERE content LIKE ?'
     )
-    .all()
+    .all(`%${mediaId}%`)
 
   for (const row of pageTranslations) {
-    const content = JSON.parse(row.content)
-    const fieldsJson = JSON.stringify(content.fields)
-    if (fieldContainsMediaId(fieldsJson, mediaId)) {
-      references.push({
-        type: 'page',
-        id: row.page_id,
-        language: row.language,
-      })
+    try {
+      const content = JSON.parse(row.content)
+      if (fieldsContainMediaId(content.fields, mediaId)) {
+        references.push({
+          type: 'page',
+          id: row.page_id,
+          language: row.language,
+        })
+      }
+    } catch {
+      // Ignore invalid JSON
     }
   }
 
-  // Check post translations
+  // Check post translations (use LIKE filter first for efficiency)
   const postTranslations = db
-    .prepare<[], { post_id: string; language: string; content: string }>(
-      'SELECT post_id, language, content FROM post_translations'
+    .prepare<[string], { post_id: string; language: string; content: string }>(
+      'SELECT post_id, language, content FROM post_translations WHERE content LIKE ?'
     )
-    .all()
+    .all(`%${mediaId}%`)
 
   for (const row of postTranslations) {
-    const content = JSON.parse(row.content)
-    const fieldsJson = JSON.stringify(content.fields)
-    if (fieldContainsMediaId(fieldsJson, mediaId)) {
-      references.push({
-        type: 'post',
-        id: row.post_id,
-        language: row.language,
-      })
+    try {
+      const content = JSON.parse(row.content)
+      if (fieldsContainMediaId(content.fields, mediaId)) {
+        references.push({
+          type: 'post',
+          id: row.post_id,
+          language: row.language,
+        })
+      }
+    } catch {
+      // Ignore invalid JSON
     }
   }
 
@@ -203,14 +209,27 @@ function getMimeTypePattern(type: 'image' | 'video' | 'audio' | 'document'): str
 }
 
 /**
- * Check if fields JSON contains a media ID reference
+ * Check if fields object contains a media ID reference
+ * Recursively searches for MediaReference objects
  */
-function fieldContainsMediaId(fieldsJson: string, mediaId: string): boolean {
-  try {
-    const fields = JSON.parse(fieldsJson)
-    const jsonString = JSON.stringify(fields)
-    return jsonString.includes(mediaId)
-  } catch {
-    return false
+function fieldsContainMediaId(fields: Record<string, any>, mediaId: string): boolean {
+  for (const value of Object.values(fields)) {
+    if (!value) continue
+
+    // Check if it's a MediaReference object
+    if (typeof value === 'object' && value.mediaId === mediaId) {
+      return true
+    }
+
+    // Check if it's an array of MediaReference objects (gallery field)
+    if (Array.isArray(value)) {
+      for (const item of value) {
+        if (typeof item === 'object' && item.mediaId === mediaId) {
+          return true
+        }
+      }
+    }
   }
+
+  return false
 }

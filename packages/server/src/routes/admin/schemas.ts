@@ -31,6 +31,79 @@ import {
   adminDeletePostTypeSchemaSchema,
 } from '../../schemas/index.js'
 
+/**
+ * Validate schema fields before saving
+ */
+function validateSchemaFieldsInput(fields: any[]): { valid: boolean; error?: string } {
+  if (!Array.isArray(fields)) {
+    return { valid: false, error: 'Fields must be an array' }
+  }
+
+  const seenKeys = new Set<string>()
+  const reservedKeys = ['id', 'slug', 'title', 'type', 'status', 'position', 'publishedAt', 'createdAt', 'updatedAt', 'translations', 'fields']
+  const allowedTypes = ['text', 'textarea', 'richtext', 'image', 'gallery', 'url', 'boolean']
+  const keyPattern = /^[a-z][a-z0-9_]*$/
+
+  for (let i = 0; i < fields.length; i++) {
+    const field = fields[i]
+
+    if (!field || typeof field !== 'object') {
+      return { valid: false, error: `Field at index ${i} must be an object` }
+    }
+
+    if (!field.key || typeof field.key !== 'string') {
+      return { valid: false, error: `Field at index ${i} must have a key` }
+    }
+
+    if (!keyPattern.test(field.key)) {
+      return { valid: false, error: `Field key "${field.key}" must start with lowercase letter and contain only lowercase letters, numbers, and underscores` }
+    }
+
+    if (field.key.length > 32) {
+      return { valid: false, error: `Field key "${field.key}" exceeds 32 character limit` }
+    }
+
+    if (reservedKeys.includes(field.key)) {
+      return { valid: false, error: `Field key "${field.key}" is reserved` }
+    }
+
+    if (seenKeys.has(field.key)) {
+      return { valid: false, error: `Duplicate field key "${field.key}"` }
+    }
+    seenKeys.add(field.key)
+
+    if (!field.type || !allowedTypes.includes(field.type)) {
+      return { valid: false, error: `Field "${field.key}" has invalid type "${field.type}". Allowed: ${allowedTypes.join(', ')}` }
+    }
+
+    if (!field.label || typeof field.label !== 'string') {
+      return { valid: false, error: `Field "${field.key}" must have a label` }
+    }
+  }
+
+  if (fields.length > 50) {
+    return { valid: false, error: 'Maximum 50 fields per schema' }
+  }
+
+  return { valid: true }
+}
+
+/**
+ * Validate slug format
+ */
+function validateSlugFormat(slug: string): { valid: boolean; error?: string } {
+  if (!slug || typeof slug !== 'string') {
+    return { valid: false, error: 'Slug is required' }
+  }
+  if (!/^[a-z][a-z0-9-]*$/.test(slug)) {
+    return { valid: false, error: 'Slug must start with lowercase letter and contain only lowercase letters, numbers, and hyphens' }
+  }
+  if (slug.length > 64) {
+    return { valid: false, error: 'Slug exceeds 64 character limit' }
+  }
+  return { valid: true }
+}
+
 export async function registerAdminSchemaRoutes(app: FastifyInstance) {
   // Get all schemas from database
   app.get('/api/admin/schemas', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
@@ -43,6 +116,18 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
   // Create page schema
   app.post('/api/admin/schemas/pages', { preHandler: [requireAuth, requireOwner], schema: adminCreatePageSchemaSchema }, async (request, reply) => {
     const { slug, fields } = request.body as { slug: string; fields: any[] }
+
+    // Validate slug format
+    const slugValidation = validateSlugFormat(slug)
+    if (!slugValidation.valid) {
+      return errors.validation(reply, slugValidation.error!)
+    }
+
+    // Validate fields
+    const fieldsValidation = validateSchemaFieldsInput(fields)
+    if (!fieldsValidation.valid) {
+      return errors.validation(reply, fieldsValidation.error!)
+    }
 
     // Check if slug already exists in database
     const existing = getPageSchema(app.db, slug)
@@ -66,6 +151,14 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
   app.put('/api/admin/schemas/pages/:slug', { preHandler: [requireAuth, requireOwner], schema: adminUpdatePageSchemaSchema }, async (request, reply) => {
     const { slug } = request.params as { slug: string }
     const { fields } = request.body as { fields: any[] }
+
+    // Validate fields if provided
+    if (fields) {
+      const fieldsValidation = validateSchemaFieldsInput(fields)
+      if (!fieldsValidation.valid) {
+        return errors.validation(reply, fieldsValidation.error!)
+      }
+    }
 
     // Check if schema exists in database
     const existing = getPageSchema(app.db, slug)
@@ -128,6 +221,26 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
       fields: any[]
     }
 
+    // Validate slug format
+    const slugValidation = validateSlugFormat(slug)
+    if (!slugValidation.valid) {
+      return errors.validation(reply, slugValidation.error!)
+    }
+
+    // Validate name and nameSingular
+    if (!name || typeof name !== 'string' || name.trim().length === 0) {
+      return errors.validation(reply, 'Name is required')
+    }
+    if (!nameSingular || typeof nameSingular !== 'string' || nameSingular.trim().length === 0) {
+      return errors.validation(reply, 'Singular name is required')
+    }
+
+    // Validate fields
+    const fieldsValidation = validateSchemaFieldsInput(fields)
+    if (!fieldsValidation.valid) {
+      return errors.validation(reply, fieldsValidation.error!)
+    }
+
     // Check if slug already exists in database
     const existing = getPostTypeSchema(app.db, slug)
     if (existing) {
@@ -150,6 +263,14 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
   app.put('/api/admin/schemas/post-types/:slug', { preHandler: [requireAuth, requireOwner], schema: adminUpdatePostTypeSchemaSchema }, async (request, reply) => {
     const { slug } = request.params as { slug: string }
     const body = request.body as { name?: string; nameSingular?: string; fields?: any[] }
+
+    // Validate fields if provided
+    if (body.fields) {
+      const fieldsValidation = validateSchemaFieldsInput(body.fields)
+      if (!fieldsValidation.valid) {
+        return errors.validation(reply, fieldsValidation.error!)
+      }
+    }
 
     // Check if schema exists in database
     const existing = getPostTypeSchema(app.db, slug)

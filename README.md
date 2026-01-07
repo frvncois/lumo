@@ -48,9 +48,9 @@ npm install
 npm run build
 ```
 
-### 3. Configure Your Content Schema
+### 3. Configure System Settings
 
-Edit `lumo.config.ts` to define your pages and post types.
+Edit `lumo.config.ts` to configure languages and media limits. Content schemas (pages and post types) are managed via the admin UI and stored in the database.
 
 ### 4. Start the Development Server
 
@@ -89,28 +89,25 @@ API server. Contains:
 
 ## Configuration
 
-The `lumo.config.ts` file defines your content schema:
+The `lumo.config.ts` file defines system settings:
 
 ```typescript
 export default {
+  // Language configuration
   languages: ['en', 'fr'],
   defaultLanguage: 'en',
 
-  pages: {
-    home: { fields: [...] },
-    about: { fields: [...] }
-  },
-
-  postTypes: {
-    blog: { name: 'Blog Posts', fields: [...] }
-  },
-
+  // Media upload limits
   media: {
     maxImageSize: 10 * 1024 * 1024,
-    // ...
+    maxVideoSize: 100 * 1024 * 1024,
+    maxAudioSize: 50 * 1024 * 1024,
+    maxDocumentSize: 25 * 1024 * 1024
   }
 }
 ```
+
+**Note:** Content schemas (pages and post types) are managed via the admin UI and stored in the database. They are automatically loaded into `app.config.pages` and `app.config.postTypes` at runtime.
 
 ## Environment Variables
 
@@ -132,7 +129,7 @@ CORS_ORIGIN=*
 ## Core Principles
 
 1. **Content ≠ Structure** - Clients edit content, not layout
-2. **Schemas are locked** - Defined by developers, not editable at runtime
+2. **Schemas are managed centrally** - Defined via admin UI, stored in database, validated strictly
 3. **No structured repeaters** - Lists are modeled as collections (Posts)
 4. **Explicit validation** - Core never auto-fixes, always rejects invalid data
 5. **Translations duplicate content** - No field-level translations, no fallback chains

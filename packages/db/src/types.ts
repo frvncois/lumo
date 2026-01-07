@@ -10,6 +10,7 @@
 
 export interface PageRow {
   id: string
+  schema_slug: string
   created_at: string
   updated_at: string
 }

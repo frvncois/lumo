@@ -17,12 +17,14 @@ import {
   createUser,
   createCollaborator,
   getCollaboratorByUserId,
+  getPasswordChangedAt,
 } from '@lumo/db'
 import { generateId } from '../../utils/tokens.js'
 import { hashPassword, verifyPassword, validatePassword } from '../../utils/password.js'
 import { errors } from '../../utils/errors.js'
 import { SessionConfig, UserRoles } from '../../constants.js'
 import { authSetupSchema, authLoginSchema } from '../../schemas/index.js'
+import { logAuditEvent } from '../../utils/audit.js'
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   // Stricter rate limit for auth endpoints
@@ -99,7 +101,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const collaborator = createCollaborator(app.db, collaboratorId, userId, UserRoles.OWNER)
 
     // Create session token
-    const sessionToken = createSessionToken(user.id, collaborator.role)
+    const sessionToken = createSessionToken(user.id, collaborator.role, undefined)
 
     // Set cookie
     reply.setCookie('session', sessionToken, {
@@ -108,6 +110,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       sameSite: 'lax',
       path: '/',
       maxAge: SessionConfig.MAX_AGE_SECONDS,
+    })
+
+    logAuditEvent(app, {
+      event: 'AUTH_SETUP',
+      userId: user.id,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'],
     })
 
     return {
@@ -130,6 +139,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
     // Validate inputs
     if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+      logAuditEvent(app, {
+        event: 'AUTH_LOGIN_FAILURE',
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+        details: { email },
+      })
       return errors.invalidCredentials(reply)
     }
 
@@ -137,12 +152,24 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const user = getUserByEmail(app.db, email)
     if (!user || !user.passwordHash) {
       // Don't reveal if user exists
+      logAuditEvent(app, {
+        event: 'AUTH_LOGIN_FAILURE',
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+        details: { email },
+      })
       return errors.invalidCredentials(reply)
     }
 
     // Verify password
     const isValid = await verifyPassword(password, user.passwordHash)
     if (!isValid) {
+      logAuditEvent(app, {
+        event: 'AUTH_LOGIN_FAILURE',
+        ip: request.ip,
+        userAgent: request.headers['user-agent'],
+        details: { email },
+      })
       return errors.invalidCredentials(reply)
     }
 
@@ -153,7 +180,8 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Create session token
-    const sessionToken = createSessionToken(user.id, collaborator.role)
+    const passwordChangedAt = getPasswordChangedAt(app.db, user.id)
+    const sessionToken = createSessionToken(user.id, collaborator.role, passwordChangedAt ?? undefined)
 
     // Set cookie
     reply.setCookie('session', sessionToken, {
@@ -162,6 +190,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       sameSite: 'lax',
       path: '/',
       maxAge: SessionConfig.MAX_AGE_SECONDS,
+    })
+
+    logAuditEvent(app, {
+      event: 'AUTH_LOGIN_SUCCESS',
+      userId: user.id,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'],
     })
 
     return {
@@ -193,6 +228,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post('/api/logout', async (request, reply) => {
     reply.clearCookie('session', { path: '/' })
+
+    logAuditEvent(app, {
+      event: 'AUTH_LOGOUT',
+      userId: request.cookies.session ? 'unknown' : undefined,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'],
+    })
 
     return { ok: true }
   })

@@ -19,6 +19,7 @@ import {
   upsertPageTranslation,
   deletePageTranslation,
   deletePage,
+  getPageSchema,
 } from '@lumo/db'
 import { validatePageTranslation } from '@lumo/core'
 import { generateId } from '../../utils/tokens.js'
@@ -51,17 +52,10 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
     Params: { id: string }
   }>('/api/admin/pages/:id', { preHandler: requireAuth, schema: adminGetPageByIdSchema }, async (request, reply) => {
     const { id } = request.params
-    let page = getPageById(app.db, id)
+    const page = getPageById(app.db, id)
 
-    // If page doesn't exist but is defined in config, create it
     if (!page) {
-      // Check if page ID exists in config
-      if (!app.config.pages?.[id]) {
-        return errors.notFound(reply, `Page "${id}"`)
-      }
-
-      // Create empty page record
-      page = createPage(app.db, id, {})
+      return errors.notFound(reply, 'Page')
     }
 
     return page
@@ -73,38 +67,41 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
    */
   app.post<{
     Body: {
+      schemaSlug: string
       translations: PageTranslations
     }
   }>('/api/admin/pages', { preHandler: requireAuth, schema: adminCreatePageSchema }, async (request, reply) => {
-    const { translations } = request.body
+    const { schemaSlug, translations } = request.body
+
+    // Validate schema exists in database
+    const schema = getPageSchema(app.db, schemaSlug)
+    if (!schema) {
+      return errors.validation(reply, `Page schema "${schemaSlug}" does not exist`)
+    }
 
     // Validate default language exists
     if (!translations[app.config.defaultLanguage]) {
       return errors.validation(reply, `Default language "${app.config.defaultLanguage}" translation is required`)
     }
 
-    // Get page slug from default translation
-    const defaultTranslation = translations[app.config.defaultLanguage]
-    const pageSlug = defaultTranslation.slug
-
-    // Check if page exists in config
-    if (!app.config.pages?.[pageSlug]) {
-      return errors.validation(reply, `Page "${pageSlug}" is not defined in configuration`)
+    // Build temporary config with just this schema for validation
+    const tempConfig = {
+      ...app.config,
+      pages: { [schemaSlug]: schema },
     }
 
     // Validate each translation
     for (const [lang, content] of Object.entries(translations)) {
-      const result = validatePageTranslation(pageSlug, lang, content, app.config)
+      const result = validatePageTranslation(schemaSlug, lang, content, tempConfig)
       if (!result.success) {
         return errors.validation(reply, 'Validation failed', result.errors)
       }
-
     }
 
     const pageId = generateId('page')
 
     try {
-      const page = createPage(app.db, pageId, translations)
+      const page = createPage(app.db, pageId, schemaSlug, translations)
       return reply.code(201).send(page)
     } catch (error: any) {
       // Handle unique constraint violation
@@ -126,24 +123,26 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
     const { id, lang } = request.params
     const content = request.body
 
-    let page = getPageById(app.db, id)
+    const page = getPageById(app.db, id)
 
-    // If page doesn't exist but is defined in config, create it
     if (!page) {
-      // Check if page ID exists in config
-      if (!app.config.pages?.[id]) {
-        return errors.notFound(reply, `Page "${id}"`)
-      }
-
-      // Create page record
-      page = createPage(app.db, id, {})
+      return errors.notFound(reply, 'Page')
     }
 
-    // Determine page slug from content or ID
-    const pageSlug = id
+    // Get schema from database
+    const schema = getPageSchema(app.db, page.schemaSlug)
+    if (!schema) {
+      return errors.validation(reply, `Page schema "${page.schemaSlug}" does not exist`)
+    }
+
+    // Build temporary config with just this schema for validation
+    const tempConfig = {
+      ...app.config,
+      pages: { [page.schemaSlug]: schema },
+    }
 
     // Validate translation
-    const result = validatePageTranslation(pageSlug, lang, content, app.config)
+    const result = validatePageTranslation(page.schemaSlug, lang, content, tempConfig)
     if (!result.success) {
       return reply.code(400).send({
         error: {

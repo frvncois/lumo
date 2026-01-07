@@ -1,0 +1,9 @@
+<template>
+  <svg id="documents-file.6" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    <path id="Path_26" data-name="Path 26" d="M8,18H5a2,2,0,0,1-2-2V3" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>
+    <line id="Line_7" data-name="Line 7" x1="5" transform="translate(3 7)" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>
+    <path id="Path_27" data-name="Path 27" d="M18.085,3H12.5A1.5,1.5,0,0,0,11,4.5v5A1.5,1.5,0,0,0,12.5,11h7A1.5,1.5,0,0,0,21,9.5V5.915a1.5,1.5,0,0,0-.439-1.061L19.145,3.439A1.5,1.5,0,0,0,18.085,3Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" fill-rule="evenodd"/>
+    <path id="Path_28" data-name="Path 28" d="M18.085,14H12.5A1.5,1.5,0,0,0,11,15.5v5A1.5,1.5,0,0,0,12.5,22h7A1.5,1.5,0,0,0,21,20.5V16.915a1.5,1.5,0,0,0-.439-1.061l-1.415-1.415A1.5,1.5,0,0,0,18.085,14Z" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" fill-rule="evenodd"/>
+    <path id="Path_29" data-name="Path 29" d="M0,0H24V24H0Z" fill="none"/>
+  </svg>
+</template>

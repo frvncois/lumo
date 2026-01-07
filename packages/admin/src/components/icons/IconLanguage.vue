@@ -1,0 +1,12 @@
+<template>
+  <svg id="interface-essential-179" xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24">
+    <g id="Group_8" data-name="Group 8">
+      <path id="Path_30" data-name="Path 30" d="M7.5,4V7" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>
+      <path id="Path_31" data-name="Path 31" d="M20.5,20l-4-9-4,9" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>
+      <path id="Path_32" data-name="Path 32" d="M13.39,18h6.22" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>
+      <path id="Path_33" data-name="Path 33" d="M3.5,15a9,9,0,0,0,8-8h-8" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>
+      <path id="Path_34" data-name="Path 34" d="M11.5,15a5.625,5.625,0,0,1-5-5" fill="none" stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5"/>
+    </g>
+    <path id="Path_35" data-name="Path 35" d="M0,0H24V24H0Z" fill="none"/>
+  </svg>
+</template>

@@ -249,8 +249,7 @@ packages/server/
 │   │   ├── preview.ts
 │   │   └── auth.ts
 │   └── utils/
-│       ├── token.ts       # Token signing/verification
-│       └── email.ts       # Magic link emails
+│       └── token.ts       # Token signing/verification
 ├── package.json
 └── tsconfig.json
 ```
@@ -265,7 +264,7 @@ packages/server/
 4. **DB schema** — Create SQLite tables
 5. **DB adapters** — CRUD operations for all entities
 6. **Server setup** — Fastify with routes
-7. **Auth flow** — Magic link + sessions
+7. **Auth flow** — Password + sessions
 8. **Admin UI** — Vue 3 app with TipTap editor
 9. **CLI** — `lumo init` command
 

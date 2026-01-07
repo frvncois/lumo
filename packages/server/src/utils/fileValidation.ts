@@ -39,3 +39,33 @@ export function formatBytes(bytes: number): string {
   const i = Math.floor(Math.log(bytes) / Math.log(k))
   return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`
 }
+
+export interface FileValidationResult {
+  valid: boolean
+  error?: string
+}
+
+// Allowlist of MIME types
+const ALLOWED_MIME_TYPES = {
+  image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
+  video: ['video/mp4', 'video/webm', 'video/ogg'],
+  audio: ['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm'],
+  document: ['application/pdf', 'text/plain'],
+}
+
+export function validateFileMimeType(mimeType: string, expectedType: string): FileValidationResult {
+  const allowedTypes = ALLOWED_MIME_TYPES[expectedType as keyof typeof ALLOWED_MIME_TYPES]
+
+  if (!allowedTypes) {
+    return { valid: false, error: `Invalid file type: ${expectedType}` }
+  }
+
+  if (!allowedTypes.includes(mimeType)) {
+    return {
+      valid: false,
+      error: `MIME type ${mimeType} not allowed for ${expectedType}. Allowed types: ${allowedTypes.join(', ')}`
+    }
+  }
+
+  return { valid: true }
+}

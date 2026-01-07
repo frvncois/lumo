@@ -13,7 +13,7 @@ packages/admin/
 │   ├── router/
 │   │   └── index.ts               # Vue Router configuration
 │   ├── views/
-│   │   ├── Login.vue              # Login page (magic link flow)
+│   │   ├── Login.vue              # Login page
 │   │   ├── Dashboard.vue          # Dashboard (list pages/posts)
 │   │   ├── PageEditor.vue         # Page editor with schema fields
 │   │   ├── PostEditor.vue         # Post editor with status/publish
@@ -41,7 +41,7 @@ packages/admin/
 ## Features
 
 ### 1. Authentication
-- Magic link login flow
+- Password-based login
 - Session management with cookies
 - Auto-redirect to dashboard on auth
 
@@ -103,8 +103,8 @@ The admin app proxies all `/api/*` requests to the LUMO server (default: `http:/
 ### Key API Endpoints Used
 
 **Auth:**
-- POST `/api/auth/magic-link` - Request magic link
-- GET `/api/auth/verify?token=` - Verify and create session
+- POST `/api/auth/setup` - Initial setup (first user)
+- POST `/api/auth/login` - Login with password
 - GET `/api/me` - Get current user
 - POST `/api/logout` - Logout
 

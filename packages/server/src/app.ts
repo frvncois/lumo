@@ -36,8 +36,16 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   })
 
   // Register plugins
+  const cookieSecret = process.env.COOKIE_SECRET
+  if (!cookieSecret || cookieSecret === 'replace-me-in-production') {
+    if (process.env.NODE_ENV === 'production') {
+      throw new Error('COOKIE_SECRET environment variable must be set in production')
+    }
+    console.warn('⚠️  WARNING: Using default COOKIE_SECRET. Set COOKIE_SECRET env var for production.')
+  }
+
   await app.register(cookie, {
-    secret: process.env.COOKIE_SECRET || 'replace-me-in-production',
+    secret: cookieSecret || 'dev-secret-do-not-use-in-production',
   })
 
   await app.register(multipart, {
@@ -51,8 +59,13 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
     },
   })
 
+  const corsOrigin = process.env.CORS_ORIGIN
+  if (process.env.NODE_ENV === 'production' && (!corsOrigin || corsOrigin === '*')) {
+    throw new Error('CORS_ORIGIN must be set to specific origins in production (not *)')
+  }
+
   await app.register(cors, {
-    origin: process.env.CORS_ORIGIN || '*',
+    origin: corsOrigin || (process.env.NODE_ENV === 'production' ? false : true),
     credentials: true,
   })
 

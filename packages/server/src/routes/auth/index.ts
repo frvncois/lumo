@@ -25,6 +25,21 @@ import { SessionConfig, UserRoles } from '../../constants.js'
 import { authSetupSchema, authLoginSchema } from '../../schemas/index.js'
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
+  // Stricter rate limit for auth endpoints
+  const authRateLimit = {
+    max: 5,
+    timeWindow: '15 minutes',
+    keyGenerator: (request: any) => {
+      return request.ip
+    },
+    errorResponseBuilder: (_request: any, context: any) => ({
+      error: {
+        code: 'RATE_LIMIT_EXCEEDED',
+        message: `Too many login attempts. Retry in ${Math.ceil(context.ttl / 1000)} seconds.`,
+      },
+    }),
+  }
+
   /**
    * GET /api/config
    * Get LUMO configuration (languages, pages, postTypes)
@@ -56,7 +71,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post<{
     Body: { email: string; password: string }
-  }>('/api/auth/setup', { schema: authSetupSchema }, async (request, reply) => {
+  }>('/api/auth/setup', { ...authRateLimit, schema: authSetupSchema }, async (request, reply) => {
     const { email, password } = request.body
 
     // Check if setup is needed
@@ -110,7 +125,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
    */
   app.post<{
     Body: { email: string; password: string }
-  }>('/api/auth/login', { schema: authLoginSchema }, async (request, reply) => {
+  }>('/api/auth/login', { ...authRateLimit, schema: authLoginSchema }, async (request, reply) => {
     const { email, password } = request.body
 
     // Validate inputs

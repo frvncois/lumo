@@ -18,7 +18,11 @@ import {
   migratePageTranslations,
   migratePostTranslations,
   withTransaction,
+  getPageById,
+  deletePage,
+  listPosts,
 } from '@lumo/db'
+import { validatePageSchema, validatePostTypeSchema } from '@lumo/core'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireOwner } from '../../middleware/permissions.js'
 import { errors } from '../../utils/errors.js'
@@ -30,63 +34,6 @@ import {
   adminUpdatePostTypeSchemaSchema,
   adminDeletePostTypeSchemaSchema,
 } from '../../schemas/index.js'
-
-/**
- * Validate schema fields before saving
- */
-function validateSchemaFieldsInput(fields: any[]): { valid: boolean; error?: string } {
-  if (!Array.isArray(fields)) {
-    return { valid: false, error: 'Fields must be an array' }
-  }
-
-  const seenKeys = new Set<string>()
-  const reservedKeys = ['id', 'slug', 'title', 'type', 'status', 'position', 'publishedAt', 'createdAt', 'updatedAt', 'translations', 'fields']
-  const allowedTypes = ['text', 'textarea', 'richtext', 'image', 'gallery', 'url', 'boolean']
-  const keyPattern = /^[a-z][a-z0-9_]*$/
-
-  for (let i = 0; i < fields.length; i++) {
-    const field = fields[i]
-
-    if (!field || typeof field !== 'object') {
-      return { valid: false, error: `Field at index ${i} must be an object` }
-    }
-
-    if (!field.key || typeof field.key !== 'string') {
-      return { valid: false, error: `Field at index ${i} must have a key` }
-    }
-
-    if (!keyPattern.test(field.key)) {
-      return { valid: false, error: `Field key "${field.key}" must start with lowercase letter and contain only lowercase letters, numbers, and underscores` }
-    }
-
-    if (field.key.length > 32) {
-      return { valid: false, error: `Field key "${field.key}" exceeds 32 character limit` }
-    }
-
-    if (reservedKeys.includes(field.key)) {
-      return { valid: false, error: `Field key "${field.key}" is reserved` }
-    }
-
-    if (seenKeys.has(field.key)) {
-      return { valid: false, error: `Duplicate field key "${field.key}"` }
-    }
-    seenKeys.add(field.key)
-
-    if (!field.type || !allowedTypes.includes(field.type)) {
-      return { valid: false, error: `Field "${field.key}" has invalid type "${field.type}". Allowed: ${allowedTypes.join(', ')}` }
-    }
-
-    if (!field.label || typeof field.label !== 'string') {
-      return { valid: false, error: `Field "${field.key}" must have a label` }
-    }
-  }
-
-  if (fields.length > 50) {
-    return { valid: false, error: 'Maximum 50 fields per schema' }
-  }
-
-  return { valid: true }
-}
 
 /**
  * Validate slug format
@@ -123,10 +70,10 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
       return errors.validation(reply, slugValidation.error!)
     }
 
-    // Validate fields
-    const fieldsValidation = validateSchemaFieldsInput(fields)
-    if (!fieldsValidation.valid) {
-      return errors.validation(reply, fieldsValidation.error!)
+    // Validate schema using core validator
+    const validationErrors = validatePageSchema(slug, { fields })
+    if (validationErrors.length > 0) {
+      return errors.validation(reply, 'Schema validation failed', validationErrors)
     }
 
     // Check if slug already exists in database
@@ -152,12 +99,10 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
     const { slug } = request.params as { slug: string }
     const { fields } = request.body as { fields: any[] }
 
-    // Validate fields if provided
-    if (fields) {
-      const fieldsValidation = validateSchemaFieldsInput(fields)
-      if (!fieldsValidation.valid) {
-        return errors.validation(reply, fieldsValidation.error!)
-      }
+    // Validate schema using core validator
+    const validationErrors = validatePageSchema(slug, { fields })
+    if (validationErrors.length > 0) {
+      return errors.validation(reply, 'Schema validation failed', validationErrors)
     }
 
     // Check if schema exists in database
@@ -196,11 +141,23 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
   app.delete('/api/admin/schemas/pages/:slug', { preHandler: [requireAuth, requireOwner], schema: adminDeletePageSchemaSchema }, async (request, reply) => {
     const { slug } = request.params as { slug: string }
 
-    const deleted = deletePageSchema(app.db, slug)
+    // Use transaction to delete both schema and page
+    const result = withTransaction(app.db, () => {
+      // Check if page exists for this schema (page ID = schema slug)
+      const page = getPageById(app.db, slug)
+      if (page) {
+        app.log.info(`[Schema Delete] Deleting page "${slug}" along with its schema`)
+        deletePage(app.db, slug)
+      }
 
-    if (!deleted) {
-      return errors.notFound(reply, 'Page schema')
-    }
+      // Delete the schema
+      const deleted = deletePageSchema(app.db, slug)
+      if (!deleted) {
+        throw new Error('Schema not found')
+      }
+
+      return true
+    })
 
     // Reload config to reflect schema changes
     if (app.configLoader) {
@@ -227,18 +184,10 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
       return errors.validation(reply, slugValidation.error!)
     }
 
-    // Validate name and nameSingular
-    if (!name || typeof name !== 'string' || name.trim().length === 0) {
-      return errors.validation(reply, 'Name is required')
-    }
-    if (!nameSingular || typeof nameSingular !== 'string' || nameSingular.trim().length === 0) {
-      return errors.validation(reply, 'Singular name is required')
-    }
-
-    // Validate fields
-    const fieldsValidation = validateSchemaFieldsInput(fields)
-    if (!fieldsValidation.valid) {
-      return errors.validation(reply, fieldsValidation.error!)
+    // Validate schema using core validator
+    const validationErrors = validatePostTypeSchema(slug, { name, nameSingular, fields })
+    if (validationErrors.length > 0) {
+      return errors.validation(reply, 'Schema validation failed', validationErrors)
     }
 
     // Check if slug already exists in database
@@ -264,18 +213,23 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
     const { slug } = request.params as { slug: string }
     const body = request.body as { name?: string; nameSingular?: string; fields?: any[] }
 
-    // Validate fields if provided
-    if (body.fields) {
-      const fieldsValidation = validateSchemaFieldsInput(body.fields)
-      if (!fieldsValidation.valid) {
-        return errors.validation(reply, fieldsValidation.error!)
-      }
-    }
-
     // Check if schema exists in database
     const existing = getPostTypeSchema(app.db, slug)
     if (!existing) {
       return errors.notFound(reply, 'Post type schema')
+    }
+
+    // Build complete schema for validation (merge existing with updates)
+    const schemaToValidate = {
+      name: body.name ?? existing.name,
+      nameSingular: body.nameSingular ?? existing.nameSingular,
+      fields: body.fields ?? existing.fields,
+    }
+
+    // Validate schema using core validator
+    const validationErrors = validatePostTypeSchema(slug, schemaToValidate)
+    if (validationErrors.length > 0) {
+      return errors.validation(reply, 'Schema validation failed', validationErrors)
     }
 
     // Detect field key changes (only if fields are being updated)
@@ -309,6 +263,12 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
   // Delete post type schema
   app.delete('/api/admin/schemas/post-types/:slug', { preHandler: [requireAuth, requireOwner], schema: adminDeletePostTypeSchemaSchema }, async (request, reply) => {
     const { slug } = request.params as { slug: string }
+
+    // Check if posts exist for this type
+    const posts = listPosts(app.db, { type: slug })
+    if (posts.length > 0) {
+      return errors.conflict(reply, `Cannot delete post type schema: ${posts.length} posts still exist. Delete posts first.`)
+    }
 
     const deleted = deletePostTypeSchema(app.db, slug)
 

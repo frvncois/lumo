@@ -134,7 +134,6 @@ export type PostTranslations = Record<string, TranslationContent>
  */
 export interface Page {
   id: string
-  schemaSlug: string
   translations: PageTranslations
   createdAt: string
   updatedAt: string

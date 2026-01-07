@@ -52,10 +52,17 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
     Params: { id: string }
   }>('/api/admin/pages/:id', { preHandler: requireAuth, schema: adminGetPageByIdSchema }, async (request, reply) => {
     const { id } = request.params
-    const page = getPageById(app.db, id)
+    let page = getPageById(app.db, id)
 
+    // If page doesn't exist but schema exists, create empty page record
     if (!page) {
-      return errors.notFound(reply, 'Page')
+      const schema = getPageSchema(app.db, id)
+      if (!schema) {
+        return errors.notFound(reply, `Page schema "${id}" not found`)
+      }
+
+      // Create empty page record with schema slug as ID
+      page = createPage(app.db, id, {})
     }
 
     return page
@@ -67,16 +74,16 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
    */
   app.post<{
     Body: {
-      schemaSlug: string
+      id: string
       translations: PageTranslations
     }
   }>('/api/admin/pages', { preHandler: requireAuth, schema: adminCreatePageSchema }, async (request, reply) => {
-    const { schemaSlug, translations } = request.body
+    const { id, translations } = request.body
 
-    // Validate schema exists in database
-    const schema = getPageSchema(app.db, schemaSlug)
+    // Validate schema exists (page ID = schema slug)
+    const schema = getPageSchema(app.db, id)
     if (!schema) {
-      return errors.validation(reply, `Page schema "${schemaSlug}" does not exist`)
+      return errors.validation(reply, `Page schema "${id}" does not exist`)
     }
 
     // Validate default language exists
@@ -87,21 +94,19 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
     // Build temporary config with just this schema for validation
     const tempConfig = {
       ...app.config,
-      pages: { [schemaSlug]: schema },
+      pages: { [id]: schema },
     }
 
     // Validate each translation
     for (const [lang, content] of Object.entries(translations)) {
-      const result = validatePageTranslation(schemaSlug, lang, content, tempConfig)
+      const result = validatePageTranslation(id, lang, content, tempConfig)
       if (!result.success) {
         return errors.validation(reply, 'Validation failed', result.errors)
       }
     }
 
-    const pageId = generateId('page')
-
     try {
-      const page = createPage(app.db, pageId, schemaSlug, translations)
+      const page = createPage(app.db, id, translations)
       return reply.code(201).send(page)
     } catch (error: any) {
       // Handle unique constraint violation
@@ -123,26 +128,33 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
     const { id, lang } = request.params
     const content = request.body
 
-    const page = getPageById(app.db, id)
+    let page = getPageById(app.db, id)
 
+    // If page doesn't exist but schema exists, create empty page record
     if (!page) {
-      return errors.notFound(reply, 'Page')
+      const schema = getPageSchema(app.db, id)
+      if (!schema) {
+        return errors.notFound(reply, `Page schema "${id}" not found`)
+      }
+
+      // Create empty page record with schema slug as ID
+      page = createPage(app.db, id, {})
     }
 
-    // Get schema from database
-    const schema = getPageSchema(app.db, page.schemaSlug)
+    // Get schema from database (page ID = schema slug)
+    const schema = getPageSchema(app.db, id)
     if (!schema) {
-      return errors.validation(reply, `Page schema "${page.schemaSlug}" does not exist`)
+      return errors.validation(reply, `Page schema "${id}" does not exist`)
     }
 
     // Build temporary config with just this schema for validation
     const tempConfig = {
       ...app.config,
-      pages: { [page.schemaSlug]: schema },
+      pages: { [id]: schema },
     }
 
     // Validate translation
-    const result = validatePageTranslation(page.schemaSlug, lang, content, tempConfig)
+    const result = validatePageTranslation(id, lang, content, tempConfig)
     if (!result.success) {
       return reply.code(400).send({
         error: {

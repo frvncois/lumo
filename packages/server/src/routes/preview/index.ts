@@ -40,9 +40,14 @@ export async function registerPreviewRoutes(app: FastifyInstance): Promise<void>
 
     // Validate content based on target type
     if (targetType === 'page') {
-      // For pages, validate against page schema
+      // For pages, targetId is the page ID (which equals schema slug)
+      if (!targetId) {
+        return errors.validation(reply, 'targetId is required for page previews')
+      }
+
+      // Validate against page schema
       const result = validatePageTranslation(
-        slug,
+        targetId,
         language,
         { slug, title, fields, updatedAt: new Date().toISOString() },
         app.config

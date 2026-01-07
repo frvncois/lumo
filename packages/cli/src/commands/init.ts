@@ -65,6 +65,11 @@ export async function initCommand() {
     fs.writeFileSync(configPath, DEFAULT_CONFIG, 'utf-8')
     console.log(chalk.green('✓ Created lumo.config.ts'))
 
+    // Delete old database if it exists
+    if (fs.existsSync(dbPath)) {
+      fs.unlinkSync(dbPath)
+    }
+
     // Create database using @lumo/db
     const db = createDatabase({ filename: dbPath })
     closeDatabase(db)

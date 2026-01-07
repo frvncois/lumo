@@ -14,17 +14,16 @@ import type { Page, PageTranslations, TranslationContent } from '@lumo/core'
 export function createPage(
   db: Database.Database,
   id: string,
-  schemaSlug: string,
   translations: PageTranslations
 ): Page {
   const now = new Date().toISOString()
 
   // Insert page
   const insertPage = db.prepare(`
-    INSERT INTO pages (id, schema_slug, created_at, updated_at)
-    VALUES (?, ?, ?, ?)
+    INSERT INTO pages (id, created_at, updated_at)
+    VALUES (?, ?, ?)
   `)
-  insertPage.run(id, schemaSlug, now, now)
+  insertPage.run(id, now, now)
 
   // Insert translations
   for (const [language, content] of Object.entries(translations)) {
@@ -63,7 +62,6 @@ export function getPageById(db: Database.Database, id: string): Page | null {
 
   return {
     id: pageRow.id,
-    schemaSlug: pageRow.schema_slug,
     translations,
     createdAt: pageRow.created_at,
     updatedAt: pageRow.updated_at,

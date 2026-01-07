@@ -150,6 +150,31 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
     },
   })
 
+  // Register static file serving for admin UI
+  const adminPath = path.resolve(__dirname, '../../admin/dist')
+  await app.register(staticFiles, {
+    root: adminPath,
+    prefix: '/admin/',
+    decorateReply: false, // Don't decorate since we already registered staticFiles above
+    setHeaders: (res) => {
+      res.setHeader('X-Content-Type-Options', 'nosniff')
+    },
+  })
+
+  // Serve admin UI index.html for all /admin/* routes (SPA support)
+  app.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith('/admin')) {
+      reply.sendFile('index.html', adminPath)
+    } else {
+      reply.code(404).send({
+        error: {
+          code: 'NOT_FOUND',
+          message: 'Route not found',
+        },
+      })
+    }
+  })
+
   // Store config, db, and configLoader in Fastify instance
   app.decorate('config', config)
   app.decorate('db', db)
@@ -160,6 +185,11 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   // Health check endpoint
   app.get('/health', async () => {
     return { status: 'ok' }
+  })
+
+  // Redirect root to admin
+  app.get('/', async (request, reply) => {
+    reply.redirect('/admin')
   })
 
   // Register routes

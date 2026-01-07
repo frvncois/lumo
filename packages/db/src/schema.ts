@@ -14,7 +14,8 @@ export function initializeSchema(db: Database.Database): void {
   db.exec(`
     -- Page schemas (managed by owners)
     CREATE TABLE IF NOT EXISTS page_schemas (
-      slug TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
       fields TEXT NOT NULL, -- JSON array of field definitions
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -22,7 +23,8 @@ export function initializeSchema(db: Database.Database): void {
 
     -- Post type schemas (managed by owners)
     CREATE TABLE IF NOT EXISTS post_type_schemas (
-      slug TEXT PRIMARY KEY,
+      id TEXT PRIMARY KEY,
+      slug TEXT NOT NULL UNIQUE,
       name TEXT NOT NULL,
       name_singular TEXT NOT NULL,
       fields TEXT NOT NULL, -- JSON array of field definitions
@@ -33,10 +35,8 @@ export function initializeSchema(db: Database.Database): void {
     -- Pages
     CREATE TABLE IF NOT EXISTS pages (
       id TEXT PRIMARY KEY,
-      schema_slug TEXT NOT NULL,
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
-      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
-      FOREIGN KEY (schema_slug) REFERENCES page_schemas(slug)
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
 
     -- Page translations
@@ -78,7 +78,6 @@ export function initializeSchema(db: Database.Database): void {
       FOREIGN KEY (post_id) REFERENCES posts(id) ON DELETE CASCADE
     );
 
-    CREATE UNIQUE INDEX IF NOT EXISTS idx_post_slug_unique ON post_translations(slug, language, (SELECT type FROM posts WHERE id = post_id));
     CREATE INDEX IF NOT EXISTS idx_post_translation_slug ON post_translations(slug, language);
 
     -- Media

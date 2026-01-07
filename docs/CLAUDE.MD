@@ -274,6 +274,7 @@ packages/server/
 
 ```typescript
 export default {
+  // Initial language settings (fallback if database settings not found)
   languages: ['en', 'fr'],
   defaultLanguage: 'en',
 
@@ -289,8 +290,10 @@ export default {
 // They are managed through the admin UI and stored in database
 ```
 
-**Pages and Post Types are NOT defined in `lumo.config.ts`.**
-They are created and managed by Owners through the admin UI.
+**Pages, Post Types, and Languages are managed through the admin UI:**
+- **Pages & Post Types** — Created and edited by Owners via Schema Editor
+- **Languages** — Modified by Owners via Settings (stored in database)
+- **Config file** provides initial/fallback values only
 
 ---
 

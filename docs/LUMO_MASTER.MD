@@ -342,14 +342,17 @@ No auto-sync.
 
 ### 7.2 Language Configuration
 
-Defined once in config:
+Languages are stored in the database (settings table) and can be managed from the admin UI:
 
 ```typescript
 languages: ['en', 'fr']
 defaultLanguage: 'en'
 ```
 
-Languages cannot be modified from the UI.
+- Initial values can be set in `lumo.config.ts` as fallback defaults
+- Owners can modify languages through the Settings UI
+- Changes are persisted to the database and apply immediately
+- The config file values are used only if database settings don't exist
 
 ---
 

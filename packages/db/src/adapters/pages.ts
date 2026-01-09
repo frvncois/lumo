@@ -179,14 +179,13 @@ function insertPageTranslation(
   })
 
   db.prepare(`
-    INSERT INTO page_translations (page_id, language, slug, content, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO page_translations (page_id, language, slug, content, updated_at)
+    VALUES (?, ?, ?, ?, ?)
   `).run(
     pageId,
     language,
     content.slug,
     contentJson,
-    now,
     now
   )
 }

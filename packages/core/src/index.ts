@@ -30,6 +30,13 @@ export type {
   Fields,
   PageSchema,
   PostTypeSchema,
+  PageSchemaInput,
+  PostTypeSchemaInput,
+  GlobalSchema,
+  GlobalSchemaInput,
+  GlobalTranslationContent,
+  GlobalTranslations,
+  Global,
   LumoConfig,
   MediaConfig,
   TranslationContent,
@@ -52,17 +59,19 @@ export type {
 export { ErrorCodes, ValidationError, SchemaValidationError } from './errors.js'
 
 // Schema validation
-export { validateConfig, validatePageSchema, validatePostTypeSchema } from './schema/validate.js'
+export { validateConfig, validatePageSchema, validatePostTypeSchema, validateGlobalSchema } from './schema/validate.js'
 export {
   ALLOWED_FIELD_TYPES,
   RESERVED_KEYS,
   FIELD_KEY_PATTERN,
   MAX_FIELD_KEY_LENGTH,
   MAX_FIELDS_PER_SCHEMA,
+  MAX_REPEATER_DEPTH,
+  MAX_REPEATER_ITEMS,
 } from './schema/constants.js'
 
 // Content validation
-export { validateFields, validateSlug, validateTitle } from './content/validate.js'
+export { validateFields, validateSlug, validateTitle, validateGlobalTranslation } from './content/validate.js'
 export { validatePageTranslation, validatePageTranslations } from './content/page.js'
 export {
   validatePostType,

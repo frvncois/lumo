@@ -44,7 +44,12 @@ class ApiClient {
 
     if (!response.ok) {
       const error: { error: ApiError } = await response.json()
-      throw new Error(error.error.message || 'Request failed')
+      const err = new Error(error.error.message || 'Request failed')
+      // Attach validation details if present
+      if (error.error.details) {
+        ;(err as any).details = error.error.details
+      }
+      throw err
     }
 
     return response.json()
@@ -206,21 +211,21 @@ class ApiClient {
 
   // Schemas
   async getSchemas() {
-    return this.request<{ pages: PageSchema[]; postTypes: PostTypeSchema[] }>('/admin/schemas')
+    return this.request<{ pages: PageSchema[]; postTypes: PostTypeSchema[]; globals: any[] }>('/admin/schemas')
   }
 
   // Page schemas
-  async createPageSchema(data: { slug: string; fields: Field[] }) {
+  async createPageSchema(data: { slug: string; name: string; fields: Field[] }) {
     return this.request<PageSchema>('/admin/schemas/pages', {
       method: 'POST',
       body: JSON.stringify(data),
     })
   }
 
-  async updatePageSchema(slug: string, fields: Field[]) {
+  async updatePageSchema(slug: string, data: Partial<{ name: string; fields: Field[] }>) {
     return this.request<PageSchema>(`/admin/schemas/pages/${slug}`, {
       method: 'PUT',
-      body: JSON.stringify({ fields }),
+      body: JSON.stringify(data),
     })
   }
 
@@ -249,6 +254,47 @@ class ApiClient {
     return this.request<void>(`/admin/schemas/post-types/${slug}`, {
       method: 'DELETE',
     })
+  }
+
+  // Global schemas
+  async createGlobalSchema(data: { slug: string; name: string; fields: Field[] }) {
+    return this.request('/admin/schemas/globals', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async updateGlobalSchema(slug: string, data: Partial<{ name: string; fields: Field[] }>) {
+    return this.request(`/admin/schemas/globals/${slug}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteGlobalSchema(slug: string) {
+    return this.request<void>(`/admin/schemas/globals/${slug}`, {
+      method: 'DELETE',
+    })
+  }
+
+  // Globals
+  async listGlobals() {
+    return this.request<{ items: any[] }>('/admin/globals')
+  }
+
+  async getGlobal(slug: string) {
+    return this.request(`/admin/globals/${slug}`)
+  }
+
+  async updateGlobalTranslation(slug: string, lang: string, data: any) {
+    return this.request(`/admin/globals/${slug}/translations/${lang}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    })
+  }
+
+  async deleteGlobalTranslation(slug: string, lang: string) {
+    return this.request(`/admin/globals/${slug}/translations/${lang}`, { method: 'DELETE' })
   }
 
   // Settings

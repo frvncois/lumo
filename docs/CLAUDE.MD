@@ -175,6 +175,7 @@ npm install -D typescript @types/node @types/inquirer
 - `gallery` — MediaReference[] array
 - `url` — string (http, https, mailto, tel)
 - `boolean` — boolean
+- `repeater` — array of objects with sub-fields
 
 ### MediaReference Structure
 ```typescript
@@ -189,8 +190,11 @@ interface MediaReference {
 - `page_translations`
 - `posts`
 - `post_translations`
+- `globals`
+- `global_translations`
 - `page_schemas`
 - `post_type_schemas`
+- `global_schemas`
 - `media`
 - `previews`
 - `users`
@@ -332,7 +336,7 @@ npx lumo add-owner       # Add first owner
 - Add features not in the specs
 - Use ORMs (use explicit SQL)
 - Add Node APIs to Core package
-- Implement structured repeaters
+- Nest repeaters beyond 5 levels
 - Auto-delete media
 
 ---

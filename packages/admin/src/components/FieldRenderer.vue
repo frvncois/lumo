@@ -63,6 +63,14 @@
       </Button>
     </div>
 
+    <!-- Repeater Field -->
+    <RepeaterField
+      v-else-if="field.type === 'repeater'"
+      :field="field"
+      :modelValue="modelValue"
+      @update:modelValue="emit('update:modelValue', $event)"
+    />
+
     <!-- URL Field -->
     <Input
       v-else-if="field.type === 'url'"
@@ -85,6 +93,41 @@
       <span class="text-sm text-gray-600">{{ field.placeholder || 'Enable' }}</span>
     </div>
 
+    <!-- Date Field -->
+    <input
+      v-else-if="field.type === 'date'"
+      :value="modelValue"
+      @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+      type="date"
+      class="w-full px-4 py-3 border border-gray-200 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+
+    <!-- Time Field -->
+    <input
+      v-else-if="field.type === 'time'"
+      :value="modelValue"
+      @input="emit('update:modelValue', ($event.target as HTMLInputElement).value)"
+      type="time"
+      class="w-full px-4 py-3 border border-gray-200 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+    />
+
+    <!-- Select Field -->
+    <select
+      v-else-if="field.type === 'select'"
+      :value="modelValue"
+      @change="emit('update:modelValue', ($event.target as HTMLSelectElement).value)"
+      class="w-full px-4 py-3 border border-gray-200 rounded-lg text-lg focus:outline-none focus:ring-2 focus:ring-blue-500"
+    >
+      <option value="">-- Select an option --</option>
+      <option
+        v-for="option in field.options"
+        :key="option.value"
+        :value="option.value"
+      >
+        {{ option.label }}
+      </option>
+    </select>
+
     <div v-else class="text-red-600 text-sm">
       Unknown field type: {{ field.type }}
     </div>
@@ -95,6 +138,7 @@
 import { defineProps, defineEmits } from 'vue'
 import RichtextEditor from './RichtextEditor.vue'
 import ImageField from './ImageField.vue'
+import RepeaterField from './RepeaterField.vue'
 import { Input, Textarea, Button } from './ui'
 import type { Field } from '@lumo/core'
 

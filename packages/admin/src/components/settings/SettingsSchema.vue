@@ -24,7 +24,8 @@
             <ListItem
               v-for="schema in pageSchemas"
               :key="schema.slug"
-              :title="schema.slug"
+              :title="schema.name"
+              :subtitle="`Slug: ${schema.slug}`"
               :showArrow="false"
               @click="editPageSchema(schema.slug)"
             >
@@ -79,6 +80,43 @@
           </List>
         </CardContent>
       </Card>
+
+      <!-- Global Schemas Section -->
+      <Card>
+        <CardHeader title="Global Schemas">
+          <template #actions>
+            <Button @click="createGlobalSchema" variant="default" size="sm">
+              Add Global
+            </Button>
+          </template>
+        </CardHeader>
+        <CardContent>
+          <div v-if="globalSchemas.length === 0" class="p-1">
+            No global schemas configured
+          </div>
+          <List v-else>
+            <ListItem
+              v-for="schema in globalSchemas"
+              :key="schema.slug"
+              :title="schema.name"
+              :subtitle="`Slug: ${schema.slug}`"
+              :showArrow="false"
+              @click="editGlobalSchema(schema.slug)"
+            >
+              <template #actions>
+                <Button
+                  @click.stop="deleteGlobalSchemaConfirm(schema.slug)"
+                  variant="outline"
+                  size="sm"
+                  class="!text-red-600 !border-red-300 hover:!bg-red-50"
+                >
+                  Delete
+                </Button>
+              </template>
+            </ListItem>
+          </List>
+        </CardContent>
+      </Card>
     </div>
 
     <!-- Schema Modal -->
@@ -87,7 +125,7 @@
       :type="modalType"
       :schema="editingSchema"
       :isNew="isCreatingNew"
-      @save="handleSave"
+      @saved="handleSaved"
       @cancel="closeModal"
     />
   </div>
@@ -105,12 +143,13 @@ const { refresh: refreshConfig } = useConfig()
 
 const pageSchemas = ref<PageSchema[]>([])
 const postTypeSchemas = ref<PostTypeSchema[]>([])
+const globalSchemas = ref<any[]>([])
 const isLoading = ref(true)
 const error = ref('')
 
 const showModal = ref(false)
-const modalType = ref<'page' | 'postType'>('page')
-const editingSchema = ref<PageSchema | PostTypeSchema | undefined>(undefined)
+const modalType = ref<'page' | 'postType' | 'global'>('page')
+const editingSchema = ref<PageSchema | PostTypeSchema | any | undefined>(undefined)
 const isCreatingNew = ref(false)
 
 onMounted(async () => {
@@ -125,6 +164,7 @@ async function loadSchemas() {
     const data = await api.getSchemas()
     pageSchemas.value = data.pages || []
     postTypeSchemas.value = data.postTypes || []
+    globalSchemas.value = data.globals || []
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load schemas'
   } finally {
@@ -200,30 +240,45 @@ async function deletePostTypeSchemaConfirm(slug: string) {
   }
 }
 
-async function handleSave(data: any) {
-  error.value = ''
+function createGlobalSchema() {
+  modalType.value = 'global'
+  editingSchema.value = undefined
+  isCreatingNew.value = true
+  showModal.value = true
+}
+
+function editGlobalSchema(slug: string) {
+  const schema = globalSchemas.value.find((s) => s.slug === slug)
+  if (!schema) return
+
+  modalType.value = 'global'
+  editingSchema.value = schema
+  isCreatingNew.value = false
+  showModal.value = true
+}
+
+async function deleteGlobalSchemaConfirm(slug: string) {
+  const schema = globalSchemas.value.find((s) => s.slug === slug)
+  if (!schema) return
+
+  if (!confirm(`Are you sure you want to delete the global schema "${schema.name}"? This cannot be undone.`)) {
+    return
+  }
 
   try {
-    if (modalType.value === 'page') {
-      if (isCreatingNew.value) {
-        await api.createPageSchema(data)
-      } else if (editingSchema.value) {
-        await api.updatePageSchema((editingSchema.value as PageSchema).slug, data.fields)
-      }
-    } else {
-      if (isCreatingNew.value) {
-        await api.createPostTypeSchema(data)
-      } else if (editingSchema.value) {
-        await api.updatePostTypeSchema((editingSchema.value as PostTypeSchema).slug, data)
-      }
-    }
-
-    closeModal()
+    await api.deleteGlobalSchema(slug)
     await loadSchemas()
     await refreshConfig()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to save schema'
+    error.value = err instanceof Error ? err.message : 'Failed to delete global schema'
   }
+}
+
+async function handleSaved() {
+  // Modal already handled the API call - just refresh and close
+  closeModal()
+  await loadSchemas()
+  await refreshConfig()
 }
 
 function closeModal() {

@@ -13,6 +13,7 @@ import type {
   ValidationResult,
 } from '../types.js'
 import { ErrorCodes } from '../errors.js'
+import { MAX_REPEATER_ITEMS } from '../schema/constants.js'
 import { validateMediaReference as validateMediaRef, validateMediaReferenceArray } from './media.js'
 
 /**
@@ -55,7 +56,7 @@ export function validateFields(
       continue
     }
 
-    const typeErrors = validateFieldType(key, value, fieldDef.type)
+    const typeErrors = validateFieldType(key, value, fieldDef)
     errors.push(...typeErrors)
   }
 
@@ -72,10 +73,11 @@ export function validateFields(
 function validateFieldType(
   key: string,
   value: FieldValue,
-  type: string
+  fieldDef: FieldDefinition
 ): ValidationErrorDetail[] {
   const errors: ValidationErrorDetail[] = []
   const path = `fields.${key}`
+  const type = fieldDef.type
 
   switch (type) {
     case 'text':
@@ -147,12 +149,128 @@ function validateFieldType(
       }
       break
 
+    case 'repeater':
+      const repeaterErrors = validateRepeaterValue(key, value, fieldDef)
+      errors.push(...repeaterErrors)
+      break
+
     default:
       errors.push({
         path,
         reason: ErrorCodes.UNKNOWN_FIELD_TYPE,
         message: `Unknown field type "${type}"`,
       })
+  }
+
+  return errors
+}
+
+/**
+ * Validate repeater field value
+ */
+function validateRepeaterValue(
+  key: string,
+  value: FieldValue,
+  fieldDef: FieldDefinition
+): ValidationErrorDetail[] {
+  const errors: ValidationErrorDetail[] = []
+  const path = `fields.${key}`
+
+  // Value must be an array
+  if (!Array.isArray(value)) {
+    errors.push({
+      path,
+      reason: ErrorCodes.INVALID_FIELD_TYPE,
+      message: `Field "${key}" must be an array`,
+    })
+    return errors
+  }
+
+  // Check max items
+  if (value.length > MAX_REPEATER_ITEMS) {
+    errors.push({
+      path,
+      reason: ErrorCodes.REPEATER_MAX_ITEMS,
+      message: `Field "${key}" exceeds maximum of ${MAX_REPEATER_ITEMS} items`,
+    })
+    return errors
+  }
+
+  // Validate each item
+  if (!fieldDef.fields || fieldDef.fields.length === 0) {
+    errors.push({
+      path,
+      reason: ErrorCodes.REPEATER_NO_FIELDS,
+      message: `Repeater field "${key}" has no sub-fields defined`,
+    })
+    return errors
+  }
+
+  value.forEach((item, index) => {
+    if (typeof item !== 'object' || item === null || Array.isArray(item)) {
+      errors.push({
+        path: `${path}[${index}]`,
+        reason: ErrorCodes.REPEATER_INVALID_ITEM,
+        message: 'Repeater item must be an object',
+      })
+      return
+    }
+
+    // Validate item fields against sub-field schema
+    const itemFields = item as Record<string, unknown>
+    const itemErrors = validateFieldsInternal(itemFields, fieldDef.fields!, `${path}[${index}]`)
+    errors.push(...itemErrors)
+  })
+
+  return errors
+}
+
+/**
+ * Internal field validation with custom path prefix
+ */
+function validateFieldsInternal(
+  fields: Record<string, unknown>,
+  schema: FieldDefinition[],
+  pathPrefix: string
+): ValidationErrorDetail[] {
+  const errors: ValidationErrorDetail[] = []
+  const safeFields = fields || {}
+
+  // Check required fields
+  for (const fieldDef of schema) {
+    if (fieldDef.required) {
+      const value = safeFields[fieldDef.key]
+      if (value === null || value === undefined || value === '') {
+        errors.push({
+          path: `${pathPrefix}.${fieldDef.key}`,
+          reason: ErrorCodes.REQUIRED_FIELD_MISSING,
+          message: `Required field "${fieldDef.key}" is missing`,
+        })
+      }
+    }
+  }
+
+  // Validate field types
+  for (const [key, value] of Object.entries(safeFields)) {
+    const fieldDef = schema.find((f) => f.key === key)
+
+    // Unknown fields are ignored
+    if (!fieldDef) {
+      continue
+    }
+
+    // Skip null/undefined for optional fields
+    if (!fieldDef.required && (value === null || value === undefined)) {
+      continue
+    }
+
+    // Update path for nested validation
+    const typeErrors = validateFieldType(key, value as FieldValue, fieldDef)
+    const updatedErrors = typeErrors.map((err) => ({
+      ...err,
+      path: err.path.replace(`fields.${key}`, `${pathPrefix}.${key}`),
+    }))
+    errors.push(...updatedErrors)
   }
 
   return errors
@@ -246,4 +364,25 @@ export function validateTitle(title: string): ValidationResult<string> {
   }
 
   return { success: true, data: title }
+}
+
+/**
+ * Validate global translation
+ */
+export function validateGlobalTranslation(
+  translation: { fields: Fields },
+  schema: FieldDefinition[]
+): ValidationResult<{ fields: Fields }> {
+  const errors: ValidationErrorDetail[] = []
+
+  const fieldsResult = validateFields(translation.fields, schema)
+  if (!fieldsResult.success) {
+    errors.push(...fieldsResult.errors)
+  }
+
+  if (errors.length > 0) {
+    return { success: false, errors }
+  }
+
+  return { success: true, data: translation }
 }

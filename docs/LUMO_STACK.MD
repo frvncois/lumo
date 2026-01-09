@@ -234,7 +234,7 @@ export default {
 }
 ```
 
-**Page and Post Type schemas are stored in the database**, not in the config file.
+**Page, Post Type, and Global schemas are stored in the database**, not in the config file.
 Owners manage schemas through the admin UI.
 
 ---

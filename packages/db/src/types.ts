@@ -80,3 +80,26 @@ export interface CollaboratorRow {
   role: 'owner' | 'editor'
   created_at: string
 }
+
+export interface GlobalSchemaRow {
+  slug: string
+  name: string
+  fields: string // JSON array
+  created_at: string
+  updated_at: string
+}
+
+export interface GlobalRow {
+  id: string
+  schema_slug: string
+  created_at: string
+  updated_at: string
+}
+
+export interface GlobalTranslationRow {
+  id: string
+  global_id: string
+  lang: string
+  fields: string // JSON object
+  updated_at: string
+}

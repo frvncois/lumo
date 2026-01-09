@@ -71,7 +71,7 @@ import { useConfig } from '../composables/useConfig'
 
 const route = useRoute()
 const router = useRouter()
-const { config, getPostTypeSchema } = useConfig()
+const { config, getPostTypeSchema, refresh: refreshConfig } = useConfig()
 
 const type = computed(() => route.params.type as string)
 const postTypeSchema = computed(() => getPostTypeSchema(type.value))
@@ -81,6 +81,8 @@ const isLoading = ref(true)
 const error = ref('')
 
 onMounted(async () => {
+  // Refresh config to ensure we have the latest schema
+  await refreshConfig()
   await loadPosts()
 })
 

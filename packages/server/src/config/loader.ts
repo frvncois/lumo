@@ -6,8 +6,8 @@
  */
 
 import type Database from 'better-sqlite3'
-import type { LumoConfig, PageSchema, PostTypeSchema } from '@lumo/core'
-import { getAllPageSchemas, getAllPostTypeSchemas, getSetting } from '@lumo/db'
+import type { LumoConfig, PageSchema, PostTypeSchema, GlobalSchema } from '@lumo/core'
+import { getAllPageSchemas, getAllPostTypeSchemas, getAllGlobalSchemas, getSetting } from '@lumo/db'
 
 export interface ConfigLoader {
   load(): LumoConfig
@@ -34,12 +34,14 @@ export function createConfigLoader(
     // Load database schemas
     const dbPageSchemas = getAllPageSchemas(db)
     const dbPostTypeSchemas = getAllPostTypeSchemas(db)
+    const dbGlobalSchemas = getAllGlobalSchemas(db)
 
     // Convert to record format
     const pages: Record<string, PageSchema> = {}
     for (const schema of dbPageSchemas) {
       pages[schema.slug] = {
         slug: schema.slug,
+        name: schema.name,
         fields: schema.fields,
       }
     }
@@ -54,6 +56,15 @@ export function createConfigLoader(
       }
     }
 
+    const globals: Record<string, GlobalSchema> = {}
+    for (const schema of dbGlobalSchemas) {
+      globals[schema.slug] = {
+        slug: schema.slug,
+        name: schema.name,
+        fields: schema.fields,
+      }
+    }
+
     currentConfig = {
       // Use database languages if available, otherwise fall back to file config
       languages: dbLanguages || fileConfig.languages,
@@ -61,6 +72,7 @@ export function createConfigLoader(
       media: fileConfig.media,
       pages,
       postTypes,
+      globals,
     }
 
     return currentConfig

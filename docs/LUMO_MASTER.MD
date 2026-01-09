@@ -55,9 +55,8 @@ Lumo is a single product that can run in multiple modes.
 - Clients edit content, not layout
 - Schemas are owner-defined through the admin UI
 - Schemas are stored in the database and editable at runtime
-- No structured repeaters
-- Lists are modeled as collections
-- Arrays of primitives are allowed; arrays of objects are not (except system primitives)
+- Controlled complexity — Repeaters allowed with depth limits; large lists use Posts
+- Arrays of primitives are allowed; arrays of objects are allowed (with constraints)
 - Fewer features > more flexibility
 - No magic, no guessing, no auto-rendering
 
@@ -134,17 +133,129 @@ Core rejects posts with undefined types.
 
 ---
 
-## 5. Modeling Lists (Explicit)
+## 4.3 Globals
 
-> **Lumo does not support structured repeaters.**
+### 4.3.1 What is a Global?
 
-Instead:
+A Global is a **singleton content block** used for site-wide elements.
 
-* Lists of items are modeled as **Posts**
-* Each item is a flat entity
-* Ordering, filtering, and layout are handled by the frontend
+**Examples:**
+- Header (logo, navigation)
+- Footer (links, copyright)
+- Subscribe CTA
+- Site-wide banner
+- Social media links
 
-This is an intentional workflow shift and a core design constraint.
+### 4.3.2 Global Characteristics
+
+| Property | Behavior |
+|----------|----------|
+| Instance | One per schema (singleton) |
+| Status | Always live when saved |
+| Translations | Supported (like Pages) |
+| Slug | Schema slug is the identifier |
+| Draft state | None |
+
+### 4.3.3 Global vs Page vs Post
+
+| Aspect | Page | Post | Global |
+|--------|------|------|--------|
+| Instances | Multiple | Multiple | One per schema |
+| Has slug | Yes (per translation) | Yes (per translation) | No (uses schema slug) |
+| Has title | Yes | Yes | No |
+| Draft/Publish | No | Yes | No |
+| URL | /about, /fr/a-propos | /blog/my-post | N/A (API only) |
+| Use case | Standalone pages | Collections | Reusable components |
+
+### 4.3.4 Global Schema
+
+```typescript
+GlobalSchema {
+  slug: string          // Unique identifier: "header", "footer"
+  name: string          // Display name: "Header", "Footer"
+  fields: Field[]       // Schema fields
+}
+```
+
+### 4.3.5 Global Content
+
+```typescript
+Global {
+  id: string
+  schemaSlug: string
+  translations: {
+    [lang]: {
+      fields: Fields
+      updatedAt: string
+    }
+  }
+  createdAt: string
+  updatedAt: string
+}
+```
+
+### 4.3.6 Global Lifecycle
+
+1. Owner creates Global Schema (e.g., "header")
+2. Editor opens Global Editor for "header"
+3. System auto-creates Global instance on first save
+4. One instance persists for all future edits
+5. Translations work like Pages (per language)
+
+---
+
+## 5. Modeling Lists
+
+### 5.1 Repeater Fields
+
+Repeater fields allow structured, repeatable content within a single entity.
+
+**Use repeaters for:**
+- Feature lists (3-10 items)
+- FAQ sections
+- Team member highlights
+- Navigation menus
+- Pricing tiers
+
+**Constraints:**
+- Maximum nesting depth: 5 levels
+- Maximum items per repeater: 50
+- Repeaters can contain any field type, including other repeaters
+
+**Example schema:**
+```typescript
+{
+  key: 'features',
+  type: 'repeater',
+  label: 'Features',
+  required: false,
+  fields: [
+    { key: 'title', type: 'text', label: 'Title', required: true },
+    { key: 'description', type: 'textarea', label: 'Description', required: false },
+    { key: 'icon', type: 'image', label: 'Icon', required: false }
+  ]
+}
+```
+
+**Stored value:**
+```json
+{
+  "features": [
+    { "title": "Fast", "description": "Lightning speed", "icon": { "mediaId": "m1", "alt": "Speed" } },
+    { "title": "Secure", "description": "Bank-level security", "icon": null }
+  ]
+}
+```
+
+### 5.2 Posts for Large Collections
+
+For large, growing collections (blog posts, products, team members), use **Posts** instead of repeaters.
+
+**Use Posts when:**
+- Collection grows indefinitely
+- Items need individual URLs/slugs
+- Items need draft/publish workflow
+- Items need independent ordering
 
 ---
 
@@ -212,6 +323,7 @@ Editors cannot access schema management.
 | `gallery` | `MediaReference[]` | Array of media references with alt text |
 | `url` | `string` | Valid URL (http, https, mailto, tel) |
 | `boolean` | `boolean` | True/false toggle |
+| `repeater` | `object[]` | Array of structured objects with sub-fields |
 
 ---
 
@@ -282,15 +394,16 @@ Field {
   type: FieldType   // One of the allowed types
   label: string     // Human-readable label for admin UI
   required: boolean // Whether field must have a value
+  fields?: Field[]  // Sub-fields (only for repeater type)
 }
 ```
 
 Rules:
 
-* No nested fields
 * No user-defined field groups
 * No relations between content items
 * No dynamic field types
+* Repeaters may be nested up to 5 levels deep
 
 ---
 
@@ -317,14 +430,15 @@ The following keys are reserved and cannot be used as field keys:
 **Allowed:**
 
 * `MediaReference[]` (gallery field type)
+* `object[]` (repeater field type)
 
-**Not allowed:**
+**Repeater constraints:**
 
-* Arrays of user-defined objects
-* Structured repeaters with custom fields
+* Maximum 50 items per repeater instance
+* Maximum 5 levels of nesting
+* Each item validated against sub-field schema
 
-`MediaReference` is a **system primitive**, not a user-defined structure.
-This maintains the "no structured repeaters" constraint while enabling galleries with per-image alt text.
+`MediaReference` and repeater items are **system primitives** with defined structures.
 
 ---
 
@@ -645,7 +759,6 @@ If content is missing:
 * Allow layout editing
 * Provide plugins
 * Auto-translate content
-* Support structured repeaters
 * Provide enterprise workflows
 
 ---

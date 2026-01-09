@@ -48,6 +48,11 @@ const routes: RouteRecordRaw[] = [
         component: () => import('../views/PostEditor.vue'),
       },
       {
+        path: 'globals/:slug',
+        name: 'GlobalEditor',
+        component: () => import('../views/GlobalEditor.vue'),
+      },
+      {
         path: 'media',
         name: 'MediaLibrary',
         component: () => import('../views/MediaLibrary.vue'),

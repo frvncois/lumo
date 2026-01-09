@@ -37,6 +37,10 @@ export function useConfig() {
     return config.value?.postTypes?.[slug] || null
   }
 
+  function getGlobalSchema(slug: string) {
+    return config.value?.globals?.[slug] || null
+  }
+
   return {
     config: readonly(config),
     loading: readonly(loading),
@@ -45,5 +49,6 @@ export function useConfig() {
     refresh,
     getPageSchema,
     getPostTypeSchema,
+    getGlobalSchema,
   }
 }

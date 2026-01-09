@@ -14,6 +14,11 @@ import {
   getAllPostTypeSchemas,
   updatePostTypeSchema,
   deletePostTypeSchema,
+  createGlobalSchema,
+  getGlobalSchema,
+  getAllGlobalSchemas,
+  updateGlobalSchema,
+  deleteGlobalSchema,
   detectFieldKeyChanges,
   migratePageTranslations,
   migratePostTranslations,
@@ -21,8 +26,10 @@ import {
   getPageById,
   deletePage,
   listPosts,
+  getGlobalBySchemaSlug,
+  deleteGlobal,
 } from '@lumo/db'
-import { validatePageSchema, validatePostTypeSchema } from '@lumo/core'
+import { validatePageSchema, validatePostTypeSchema, validateGlobalSchema } from '@lumo/core'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireOwner } from '../../middleware/permissions.js'
 import { errors } from '../../utils/errors.js'
@@ -56,13 +63,14 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
   app.get('/api/admin/schemas', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
     const pages = getAllPageSchemas(app.db)
     const postTypes = getAllPostTypeSchemas(app.db)
+    const globals = getAllGlobalSchemas(app.db)
 
-    return { pages, postTypes }
+    return { pages, postTypes, globals }
   })
 
   // Create page schema
   app.post('/api/admin/schemas/pages', { preHandler: [requireAuth, requireOwner], schema: adminCreatePageSchemaSchema }, async (request, reply) => {
-    const { slug, fields } = request.body as { slug: string; fields: any[] }
+    const { slug, name, fields } = request.body as { slug: string; name: string; fields: any[] }
 
     // Validate slug format
     const slugValidation = validateSlugFormat(slug)
@@ -71,7 +79,7 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
     }
 
     // Validate schema using core validator
-    const validationErrors = validatePageSchema(slug, { fields })
+    const validationErrors = validatePageSchema(slug, { name, fields })
     if (validationErrors.length > 0) {
       return errors.validation(reply, 'Schema validation failed', validationErrors)
     }
@@ -82,7 +90,7 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
       return errors.conflict(reply, 'A page schema with this slug already exists')
     }
 
-    const schema = createPageSchema(app.db, { slug, fields })
+    const schema = createPageSchema(app.db, { slug, name, fields })
 
     // Reload config to reflect schema changes
     if (app.configLoader) {
@@ -97,13 +105,7 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
   // Update page schema
   app.put('/api/admin/schemas/pages/:slug', { preHandler: [requireAuth, requireOwner], schema: adminUpdatePageSchemaSchema }, async (request, reply) => {
     const { slug } = request.params as { slug: string }
-    const { fields } = request.body as { fields: any[] }
-
-    // Validate schema using core validator
-    const validationErrors = validatePageSchema(slug, { fields })
-    if (validationErrors.length > 0) {
-      return errors.validation(reply, 'Schema validation failed', validationErrors)
-    }
+    const body = request.body as { name?: string; fields?: any[] }
 
     // Check if schema exists in database
     const existing = getPageSchema(app.db, slug)
@@ -111,20 +113,34 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
       return errors.notFound(reply, 'Page schema')
     }
 
-    // Detect field key changes
-    const keyChanges = detectFieldKeyChanges(existing.fields, fields)
+    // Build complete schema for validation (merge existing with updates)
+    const schemaToValidate = {
+      name: body.name ?? existing.name,
+      fields: body.fields ?? existing.fields,
+    }
 
-    app.log.info(`[Schema Update] Page schema "${slug}" - detected ${keyChanges.size} field key changes`)
+    // Validate schema using core validator
+    const validationErrors = validatePageSchema(slug, schemaToValidate)
+    if (validationErrors.length > 0) {
+      return errors.validation(reply, 'Schema validation failed', validationErrors)
+    }
+
+    // Detect field key changes (only if fields are being updated)
+    let keyChanges: Map<string, string> | undefined
+    if (body.fields) {
+      keyChanges = detectFieldKeyChanges(existing.fields, body.fields)
+      app.log.info(`[Schema Update] Page schema "${slug}" - detected ${keyChanges.size} field key changes`)
+    }
 
     // Use transaction for migration + update
     const schema = withTransaction(app.db, () => {
       // Migrate content if keys changed
-      if (keyChanges.size > 0) {
+      if (keyChanges && keyChanges.size > 0) {
         app.log.info(`[Schema Update] Starting migration for page schema "${slug}"...`)
         const migratedCount = migratePageTranslations(app.db, slug, keyChanges)
         app.log.info(`[Schema Update] Migrated ${migratedCount} page translations`)
       }
-      return updatePageSchema(app.db, slug, fields)
+      return updatePageSchema(app.db, slug, body)
     })
 
     // Reload config to reflect schema changes
@@ -281,6 +297,115 @@ export async function registerAdminSchemaRoutes(app: FastifyInstance) {
       const newConfig = app.configLoader.reload()
       app.config = newConfig
       app.log.info('Configuration reloaded after schema deletion')
+    }
+
+    return { success: true }
+  })
+
+  // ========================================
+  // Global Schema Routes
+  // ========================================
+
+  // Create global schema
+  app.post('/api/admin/schemas/globals', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+    const { slug, name, fields } = request.body as { slug: string; name: string; fields: any[] }
+
+    // Validate slug format
+    const slugValidation = validateSlugFormat(slug)
+    if (!slugValidation.valid) {
+      return errors.validation(reply, slugValidation.error!)
+    }
+
+    // Validate schema using core validator
+    const validation = validateGlobalSchema({ slug, name, fields })
+    if (!validation.success) {
+      return errors.validation(reply, 'Schema validation failed', validation.errors)
+    }
+
+    // Check if slug already exists
+    const existing = getGlobalSchema(app.db, slug)
+    if (existing) {
+      return errors.conflict(reply, 'A global schema with this slug already exists')
+    }
+
+    const schema = createGlobalSchema(app.db, { slug, name, fields })
+
+    // Reload config to reflect schema changes
+    if (app.configLoader) {
+      const newConfig = app.configLoader.reload()
+      app.config = newConfig
+      app.log.info('Configuration reloaded after global schema creation')
+    }
+
+    return schema
+  })
+
+  // Update global schema
+  app.put('/api/admin/schemas/globals/:slug', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+    const { slug } = request.params as { slug: string }
+    const { name, fields } = request.body as { name?: string; fields?: any[] }
+
+    const existing = getGlobalSchema(app.db, slug)
+    if (!existing) {
+      return errors.notFound(reply, 'Global schema')
+    }
+
+    // Validate if fields provided
+    if (fields) {
+      const validation = validateGlobalSchema({
+        slug,
+        name: name || existing.name,
+        fields
+      })
+      if (!validation.success) {
+        return errors.validation(reply, 'Schema validation failed', validation.errors)
+      }
+    }
+
+    const schema = updateGlobalSchema(app.db, slug, { name, fields })
+
+    // Reload config to reflect schema changes
+    if (app.configLoader) {
+      const newConfig = app.configLoader.reload()
+      app.config = newConfig
+      app.log.info('Configuration reloaded after global schema update')
+    }
+
+    return schema
+  })
+
+  // Delete global schema
+  app.delete('/api/admin/schemas/globals/:slug', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
+    const { slug } = request.params as { slug: string }
+
+    const existing = getGlobalSchema(app.db, slug)
+    if (!existing) {
+      return errors.notFound(reply, 'Global schema')
+    }
+
+    // Use transaction to delete schema and global instance
+    const result = withTransaction(app.db, () => {
+      // Delete global instance if exists
+      const global = getGlobalBySchemaSlug(app.db, slug)
+      if (global) {
+        app.log.info(`[Schema Delete] Deleting global "${slug}" along with its schema`)
+        deleteGlobal(app.db, global.id)
+      }
+
+      // Delete schema
+      const deleted = deleteGlobalSchema(app.db, slug)
+      if (!deleted) {
+        throw new Error('Schema not found')
+      }
+
+      return true
+    })
+
+    // Reload config to reflect schema changes
+    if (app.configLoader) {
+      const newConfig = app.configLoader.reload()
+      app.config = newConfig
+      app.log.info('Configuration reloaded after global schema deletion')
     }
 
     return { success: true }

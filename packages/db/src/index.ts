@@ -19,6 +19,9 @@ export type {
   PageTranslationRow,
   PostRow,
   PostTranslationRow,
+  GlobalSchemaRow,
+  GlobalRow,
+  GlobalTranslationRow,
   MediaRow,
   PreviewRow,
   UserRow,
@@ -108,13 +111,33 @@ export {
   getAllPostTypeSchemas,
   updatePostTypeSchema,
   deletePostTypeSchema,
+  createGlobalSchema,
+  getGlobalSchema,
+  getAllGlobalSchemas,
+  updateGlobalSchema,
+  deleteGlobalSchema,
 } from './adapters/schemas.js'
 export type {
   PageSchemaInput,
   PostTypeSchemaInput,
+  GlobalSchemaInput,
   PageSchemaWithMetadata,
   PostTypeSchemaWithMetadata,
+  GlobalSchemaWithMetadata,
 } from './adapters/schemas.js'
+
+// Globals Adapter
+export {
+  createGlobal,
+  getGlobalBySchemaSlug,
+  getGlobalById,
+  listGlobals,
+  upsertGlobalTranslation,
+  getGlobalTranslation,
+  deleteGlobalTranslation,
+  deleteGlobal,
+  getGlobalWithTranslations,
+} from './adapters/globals.js'
 
 // Settings Adapter
 export {

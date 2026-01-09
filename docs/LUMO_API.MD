@@ -211,6 +211,35 @@ Errors:
 
 ---
 
+### 5.5 Get Global
+
+#### GET `/api/globals/:slug`
+
+Query:
+
+* `lang` (optional, default = defaultLanguage)
+
+Response:
+
+```json
+{
+  "schemaSlug": "header",
+  "fields": { "logo": { "mediaId": "...", "alt": "..." }, "nav_items": [...] },
+  "updatedAt": "..."
+}
+```
+
+Errors:
+
+* `NOT_FOUND` if global schema does not exist
+* `NOT_FOUND` if translation for language does not exist
+
+Notes:
+
+* Returns empty fields object if global instance not yet created
+
+---
+
 ## 6. Preview System
 
 Preview enables users to see unsaved changes before publishing.
@@ -652,6 +681,93 @@ Errors:
 
 ---
 
+### 9.10 List Globals (Admin)
+
+#### GET `/api/admin/globals`
+
+List all globals with their translations.
+
+Response:
+
+```json
+{
+  "items": [
+    {
+      "schemaSlug": "header",
+      "name": "Header",
+      "translations": {
+        "en": { "fields": {...}, "updatedAt": "..." }
+      }
+    }
+  ]
+}
+```
+
+---
+
+### 9.11 Get Global (Admin)
+
+#### GET `/api/admin/globals/:slug`
+
+Get global by schema slug with schema and translations.
+
+Response:
+
+```json
+{
+  "schemaSlug": "header",
+  "name": "Header",
+  "fields": [...],
+  "translations": {
+    "en": { "fields": {...}, "updatedAt": "..." }
+  }
+}
+```
+
+---
+
+### 9.12 Update Global Translation
+
+#### PUT `/api/admin/globals/:slug/translations/:lang`
+
+Create or update global translation.
+
+Body:
+
+```json
+{
+  "fields": { "logo": {...}, "nav_items": [...] }
+}
+```
+
+Response:
+
+```json
+{
+  "schemaSlug": "header",
+  "lang": "en",
+  "fields": {...},
+  "updatedAt": "..."
+}
+```
+
+Notes:
+
+* Auto-creates Global instance if not exists
+* Validates fields against schema
+
+---
+
+### 9.13 Delete Global Translation (Owner only)
+
+#### DELETE `/api/admin/globals/:slug/translations/:lang`
+
+Delete global translation (owner only).
+
+* Cannot delete default language translation
+
+---
+
 ## 10. Schema Management API (Owner Only)
 
 All schema endpoints require Owner role.
@@ -681,6 +797,15 @@ Response:
       "nameSingular": "Blog Post",
       "fields": [
         { "key": "body", "type": "richtext", "label": "Body", "required": true }
+      ]
+    }
+  ],
+  "globals": [
+    {
+      "slug": "header",
+      "name": "Header",
+      "fields": [
+        { "key": "logo", "type": "image", "label": "Logo", "required": true }
       ]
     }
   ]
@@ -803,6 +928,49 @@ Response:
 Notes:
 * Does NOT delete posts of this type
 * Posts are preserved but hidden from admin UI
+
+---
+
+### 10.8 Create Global Schema
+
+#### POST `/api/admin/schemas/globals`
+
+Create global schema (owner only).
+
+Body:
+
+```json
+{
+  "slug": "header",
+  "name": "Header",
+  "fields": [...]
+}
+```
+
+---
+
+### 10.9 Update Global Schema
+
+#### PUT `/api/admin/schemas/globals/:slug`
+
+Update global schema (owner only).
+
+Body:
+
+```json
+{
+  "name": "Site Header",
+  "fields": [...]
+}
+```
+
+---
+
+### 10.10 Delete Global Schema
+
+#### DELETE `/api/admin/schemas/globals/:slug`
+
+Delete global schema and instance (owner only).
 
 ---
 

@@ -195,8 +195,10 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   // Register routes
   const { registerPublicPagesRoutes } = await import('./routes/public/pages.js')
   const { registerPublicPostsRoutes } = await import('./routes/public/posts.js')
+  const { registerPublicGlobalRoutes } = await import('./routes/public/globals.js')
   const { registerAdminPagesRoutes } = await import('./routes/admin/pages.js')
   const { registerAdminPostsRoutes } = await import('./routes/admin/posts.js')
+  const { registerAdminGlobalRoutes } = await import('./routes/admin/globals.js')
   const { registerAdminMediaRoutes } = await import('./routes/admin/media.js')
   const { registerAdminSchemaRoutes } = await import('./routes/admin/schemas.js')
   const { registerAdminSettingsRoutes } = await import('./routes/admin/settings.js')
@@ -205,8 +207,10 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
 
   await registerPublicPagesRoutes(app)
   await registerPublicPostsRoutes(app)
+  await registerPublicGlobalRoutes(app)
   await registerAdminPagesRoutes(app)
   await registerAdminPostsRoutes(app)
+  await registerAdminGlobalRoutes(app)
   await registerAdminMediaRoutes(app)
   await registerAdminSchemaRoutes(app)
   await registerAdminSettingsRoutes(app)

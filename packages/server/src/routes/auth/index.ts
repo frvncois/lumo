@@ -44,7 +44,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
 
   /**
    * GET /api/config
-   * Get LUMO configuration (languages, pages, postTypes)
+   * Get LUMO configuration (languages, pages, postTypes, globals)
    */
   app.get('/api/config', async () => {
     return {
@@ -52,6 +52,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       defaultLanguage: app.config.defaultLanguage,
       pages: app.config.pages,
       postTypes: app.config.postTypes,
+      globals: app.config.globals,
     }
   })
 

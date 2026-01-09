@@ -11,81 +11,33 @@
     <div v-if="isLoading" class="text-gray-600">Loading post...</div>
 
     <div v-else-if="post && postTypeSchema" class="space-y-6">
-      <!-- Post Metadata -->
+      <!-- Post Title -->
       <Card>
-        <CardHeader title="Post Settings" />
+        <CardHeader title="Title" />
         <CardContent>
-          <div class="space-y-4">
-            <div class="grid grid-cols-2 gap-4">
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Status</label>
-                <select v-model="post.status" class="input">
-                  <option value="draft">Draft</option>
-                  <option value="published">Published</option>
-                </select>
-              </div>
-
-              <div>
-                <label class="block text-sm font-medium text-gray-700 mb-1">Published Date</label>
-                <input
-                  v-model="publishedDate"
-                  type="datetime-local"
-                  class="input"
-                />
-              </div>
-            </div>
-
-            <div v-if="showPositionField">
-              <label class="block text-sm font-medium text-gray-700 mb-1">Position</label>
-              <input
-                v-model.number="post.position"
-                type="number"
-                min="0"
-                class="input"
-                placeholder="Optional manual ordering"
-              />
-              <p class="text-sm text-gray-500 mt-1">
-                Lower numbers appear first. Leave empty for automatic ordering.
-              </p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-
-      <!-- Translation Metadata -->
-      <Card>
-        <CardHeader title="Post Info" />
-        <CardContent>
-          <div class="space-y-4">
-            <div>
-              <label class="block text-sm font-medium text-gray-700 mb-1">Title</label>
-              <input
-                v-model="translationTitle"
-                type="text"
-                class="input"
-                placeholder="Post title"
-                required
-              />
-            </div>
-
-          </div>
+          <Input
+            v-model="translationTitle"
+            placeholder="Post title"
+            variant="ghost"
+            size="lg"
+          />
         </CardContent>
       </Card>
 
       <!-- Form Fields -->
-      <Card>
-        <CardHeader title="Content" />
+      <Card v-for="field in postTypeSchema.fields" :key="field.key">
+        <CardHeader>
+          <h2 class="text-gray-900">
+            {{ field.label || field.key }}
+            <span v-if="field.required" class="text-red-500">*</span>
+          </h2>
+        </CardHeader>
         <CardContent>
-          <div class="space-y-6">
-            <FieldRenderer
-              v-for="field in postTypeSchema.fields"
-              :key="field.key"
-              :field="field"
-              :modelValue="translationFields[field.key]"
-              @update:modelValue="updateField(field.key, $event)"
-            />
-          </div>
+          <FieldRenderer
+            :field="field"
+            :modelValue="translationFields[field.key]"
+            @update:modelValue="updateField(field.key, $event)"
+          />
         </CardContent>
       </Card>
     </div>
@@ -121,6 +73,45 @@
 
     <!-- Teleport Details Panel -->
     <Teleport to="#details-panel" v-if="mounted">
+      <!-- Post Settings -->
+      <Card>
+        <CardHeader title="Post Settings" />
+        <CardContent>
+          <div class="space-y-4">
+            <div>
+              <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Status</label>
+              <select v-model="post.status" class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm">
+                <option value="draft">Draft</option>
+                <option value="published">Published</option>
+              </select>
+            </div>
+
+            <div>
+              <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Published Date</label>
+              <input
+                v-model="publishedDate"
+                type="datetime-local"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+              />
+            </div>
+
+            <div v-if="showPositionField">
+              <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Position</label>
+              <input
+                v-model.number="post.position"
+                type="number"
+                min="0"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm"
+                placeholder="Optional"
+              />
+              <p class="text-xs text-gray-500 mt-1">
+                Lower numbers appear first
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
       <!-- Language Selection -->
       <Card>
         <CardHeader title="Language" />
@@ -159,32 +150,43 @@
       <Card>
         <CardHeader title="Post Information" />
         <CardContent>
-          <dl class="space-y-3">
+          <div class="space-y-4">
             <div>
-              <dt class="text-xs font-medium text-gray-500 uppercase">Post ID</dt>
-              <dd class="text-sm text-gray-900 mt-1 font-mono">{{ postId }}</dd>
+              <label class="block text-xs font-medium text-gray-500 uppercase mb-2">Slug</label>
+              <input
+                v-model="translationSlug"
+                class="w-full px-3 py-2 border border-gray-300 rounded-lg text-sm font-mono"
+                placeholder="post-slug"
+              />
             </div>
-            <div>
-              <dt class="text-xs font-medium text-gray-500 uppercase">Post Type</dt>
-              <dd class="text-sm text-gray-900 mt-1 font-mono">{{ postType }}</dd>
-            </div>
-            <div>
-              <dt class="text-xs font-medium text-gray-500 uppercase">Current Language</dt>
-              <dd class="text-sm text-gray-900 mt-1 uppercase">{{ currentLanguage }}</dd>
-            </div>
-            <div v-if="translationSlug">
-              <dt class="text-xs font-medium text-gray-500 uppercase">Public API</dt>
-              <dd class="text-xs text-gray-700 mt-1 font-mono break-all">
-                /api/posts/{{ postType }}/{{ translationSlug }}?lang={{ currentLanguage }}
-              </dd>
-            </div>
-            <div v-if="currentTranslation">
-              <dt class="text-xs font-medium text-gray-500 uppercase">Last Updated</dt>
-              <dd class="text-sm text-gray-900 mt-1">
-                {{ new Date(currentTranslation.updatedAt || Date.now()).toLocaleDateString() }}
-              </dd>
-            </div>
-          </dl>
+
+            <dl class="space-y-3">
+              <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Post ID</dt>
+                <dd class="text-sm text-gray-900 mt-1 font-mono">{{ postId }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Post Type</dt>
+                <dd class="text-sm text-gray-900 mt-1 font-mono">{{ postType }}</dd>
+              </div>
+              <div>
+                <dt class="text-xs font-medium text-gray-500 uppercase">Current Language</dt>
+                <dd class="text-sm text-gray-900 mt-1 uppercase">{{ currentLanguage }}</dd>
+              </div>
+              <div v-if="translationSlug">
+                <dt class="text-xs font-medium text-gray-500 uppercase">Public API</dt>
+                <dd class="text-xs text-gray-700 mt-1 font-mono break-all">
+                  /api/posts/{{ postType }}/{{ translationSlug }}?lang={{ currentLanguage }}
+                </dd>
+              </div>
+              <div v-if="currentTranslation">
+                <dt class="text-xs font-medium text-gray-500 uppercase">Last Updated</dt>
+                <dd class="text-sm text-gray-900 mt-1">
+                  {{ new Date(currentTranslation.updatedAt || Date.now()).toLocaleDateString() }}
+                </dd>
+              </div>
+            </dl>
+          </div>
         </CardContent>
       </Card>
     </Teleport>
@@ -202,7 +204,7 @@ import { Card, CardHeader, CardContent, Button, Input } from '../components/ui'
 
 const route = useRoute()
 const router = useRouter()
-const { config, getPostTypeSchema } = useConfig()
+const { config, getPostTypeSchema, refresh: refreshConfig } = useConfig()
 const { isCreatingPreview, createPreview } = usePreview()
 
 const postId = computed(() => route.params.id as string)
@@ -241,8 +243,13 @@ watch(
       // Convert ISO string to datetime-local format
       const date = new Date(value)
       publishedDate.value = date.toISOString().slice(0, 16)
+    } else {
+      // Set to current time if not set
+      const now = new Date()
+      publishedDate.value = now.toISOString().slice(0, 16)
     }
-  }
+  },
+  { immediate: true }
 )
 
 watch(publishedDate, (value) => {
@@ -258,6 +265,8 @@ watch(currentLanguage, () => {
 
 onMounted(async () => {
   mounted.value = true
+  // Refresh config to ensure we have the latest schema
+  await refreshConfig()
   currentLanguage.value = config.value?.defaultLanguage || 'en'
   await loadPost()
   loadTranslationData()
@@ -270,9 +279,9 @@ function loadTranslationData() {
     translationSlug.value = translation.slug || ''
     translationFields.value = translation.fields || {}
   } else {
-    // Reset to empty for new translation
-    translationTitle.value = ''
-    translationSlug.value = ''
+    // For new translations, set defaults
+    translationTitle.value = 'Untitled'
+    translationSlug.value = postId.value // Default slug to post ID
     translationFields.value = {}
   }
 }
@@ -283,6 +292,11 @@ async function loadPost() {
 
   try {
     post.value = await api.getPost(postId.value)
+
+    // Set default published date to current time if not set
+    if (!post.value.publishedAt) {
+      post.value.publishedAt = new Date().toISOString()
+    }
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to load post'
   } finally {
@@ -296,6 +310,16 @@ function updateField(key: string, value: any) {
 
 async function handleSave() {
   if (!post.value || !postTypeSchema.value) return
+
+  // Validate required fields before saving
+  if (!translationTitle.value || !translationTitle.value.trim()) {
+    error.value = 'Title is required'
+    return
+  }
+  if (!translationSlug.value || !translationSlug.value.trim()) {
+    error.value = 'Slug is required'
+    return
+  }
 
   isSaving.value = true
   error.value = ''
@@ -311,8 +335,8 @@ async function handleSave() {
 
     // Construct proper TranslationContent structure
     const translationContent = {
-      title: translationTitle.value,
-      slug: translationSlug.value,
+      title: translationTitle.value.trim(),
+      slug: translationSlug.value.trim(),
       fields: translationFields.value,
     }
 

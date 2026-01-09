@@ -3,7 +3,7 @@
     <div class="bg-white rounded-lg w-full max-w-2xl max-h-[90vh] overflow-hidden">
       <div class="p-4 border-b flex justify-between items-center">
         <h2 class="text-lg font-semibold">
-          {{ isNew ? 'Create' : 'Edit' }} {{ type === 'page' ? 'Page' : 'Post Type' }}
+          {{ isNew ? 'Create' : 'Edit' }} {{ getTypeLabel() }}
         </h2>
         <button @click="$emit('cancel')" class="text-gray-500 hover:text-gray-700">✕</button>
       </div>
@@ -11,7 +11,12 @@
       <div class="p-4 overflow-y-auto max-h-[70vh]">
         <!-- Error Message -->
         <div v-if="error" class="mb-4 p-3 bg-red-50 border border-red-200 rounded text-red-800 text-sm">
-          {{ error }}
+          <div class="font-medium mb-1">{{ error }}</div>
+          <ul v-if="validationErrors.length > 0" class="list-disc list-inside text-xs space-y-1 mt-2">
+            <li v-for="(err, i) in validationErrors" :key="i">
+              <span class="font-mono">{{ err.path }}</span>: {{ err.message || err.reason }}
+            </li>
+          </ul>
         </div>
 
         <!-- Slug (only for new) -->
@@ -23,6 +28,16 @@
             placeholder="e.g. home, blog"
           />
           <p class="text-xs text-gray-500 mt-1">Lowercase, no spaces, use hyphens</p>
+        </div>
+
+        <!-- Name field for pages and globals -->
+        <div v-if="type === 'page' || type === 'global'" class="mb-4">
+          <label class="block text-sm font-medium mb-1">Name *</label>
+          <input
+            v-model="form.name"
+            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            :placeholder="type === 'page' ? 'e.g. Home Page, About Us' : 'e.g. Site Header, Footer'"
+          />
         </div>
 
         <!-- Name fields for post types -->
@@ -102,21 +117,23 @@
 import { ref, reactive, watch } from 'vue'
 import draggable from 'vuedraggable'
 import FieldRow from './FieldRow.vue'
+import { api } from '../utils/api'
 import type { Field, PageSchema, PostTypeSchema } from '@lumo/core'
 
 const props = defineProps<{
-  type: 'page' | 'postType'
-  schema?: PageSchema | PostTypeSchema
+  type: 'page' | 'postType' | 'global'
+  schema?: PageSchema | PostTypeSchema | any
   isNew: boolean
 }>()
 
 const emit = defineEmits<{
-  save: [data: any]
+  saved: []
   cancel: []
 }>()
 
 const isSaving = ref(false)
 const error = ref('')
+const validationErrors = ref<any[]>([])
 
 const form = reactive<{
   slug: string
@@ -130,12 +147,22 @@ const form = reactive<{
   fields: [],
 })
 
+function getTypeLabel(): string {
+  if (props.type === 'page') return 'Page Schema'
+  if (props.type === 'postType') return 'Post Type'
+  if (props.type === 'global') return 'Global Schema'
+  return ''
+}
+
 // Initialize form with existing schema data
 watch(
   () => props.schema,
   (schema) => {
     if (schema) {
       form.slug = schema.slug || ''
+      if ((props.type === 'page' || props.type === 'global') && 'name' in schema) {
+        form.name = schema.name || ''
+      }
       if (props.type === 'postType' && 'name' in schema) {
         form.name = schema.name || ''
         form.nameSingular = schema.nameSingular || ''
@@ -189,6 +216,14 @@ function validate(): boolean {
     }
   }
 
+  // Validate page or global name
+  if (props.type === 'page' || props.type === 'global') {
+    if (!form.name.trim()) {
+      error.value = 'Name is required'
+      return false
+    }
+  }
+
   // Validate fields
   if (form.fields.length === 0) {
     error.value = 'At least one field is required'
@@ -221,11 +256,13 @@ function validate(): boolean {
   return true
 }
 
-function save() {
+async function save() {
   if (!validate()) {
     return
   }
 
+  error.value = ''
+  validationErrors.value = []
   isSaving.value = true
 
   const data: any = {
@@ -236,16 +273,47 @@ function save() {
     data.slug = form.slug
   }
 
+  if (props.type === 'page' || props.type === 'global') {
+    data.name = form.name
+  }
+
   if (props.type === 'postType') {
     data.name = form.name
     data.nameSingular = form.nameSingular
   }
 
-  emit('save', data)
+  try {
+    // Make API call
+    if (props.type === 'page') {
+      if (props.isNew) {
+        await api.createPageSchema(data)
+      } else if (props.schema) {
+        await api.updatePageSchema((props.schema as PageSchema).slug!, data)
+      }
+    } else if (props.type === 'postType') {
+      if (props.isNew) {
+        await api.createPostTypeSchema(data)
+      } else if (props.schema) {
+        await api.updatePostTypeSchema((props.schema as PostTypeSchema).slug!, data)
+      }
+    } else if (props.type === 'global') {
+      if (props.isNew) {
+        await api.createGlobalSchema(data)
+      } else if (props.schema) {
+        await api.updateGlobalSchema(props.schema.slug, data)
+      }
+    }
 
-  // Reset saving state after a short delay (parent should close modal)
-  setTimeout(() => {
+    // Success - emit saved event to close modal and refresh
+    emit('saved')
+  } catch (err: any) {
+    error.value = err.message || 'Failed to save schema'
+    // Extract validation details if present
+    if (err.details) {
+      validationErrors.value = err.details
+    }
+  } finally {
     isSaving.value = false
-  }, 500)
+  }
 }
 </script>

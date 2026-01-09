@@ -6,27 +6,14 @@
     </div>
 
     <div v-if="saveSuccess" class="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 mb-6">
-      Page saved successfully!
+      Global saved successfully!
     </div>
 
-    <div v-if="isLoading" class="text-gray-600">Loading page...</div>
+    <div v-if="isLoading" class="text-gray-600">Loading global...</div>
 
-    <div v-else-if="page && pageSchema" class="space-y-6">
-      <!-- Page Title -->
-      <Card>
-        <CardHeader title="Title" />
-        <CardContent>
-          <Input
-            v-model="translationTitle"
-            placeholder="Page title"
-            variant="ghost"
-            size="lg"
-          />
-        </CardContent>
-      </Card>
-
+    <div v-else-if="globalData && globalSchema" class="space-y-6">
       <!-- Form Fields - Each in own Card -->
-      <Card v-for="field in pageSchema.fields" :key="field.key">
+      <Card v-for="field in globalSchema.fields" :key="field.key">
         <CardHeader>
           <h2 class="text-gray-900">
             {{ field.label || field.key }}
@@ -45,14 +32,6 @@
 
     <!-- Teleport Header Actions -->
     <Teleport to="#header-actions" v-if="mounted">
-      <Button
-        @click="handlePreview"
-        :disabled="isCreatingPreview"
-        variant="outline"
-        size="sm"
-      >
-        {{ isCreatingPreview ? 'Creating...' : 'Preview' }}
-      </Button>
       <Button
         @click="handleSave"
         :disabled="isSaving"
@@ -99,14 +78,18 @@
         </CardContent>
       </Card>
 
-      <!-- Page Information -->
+      <!-- Global Information -->
       <Card>
-        <CardHeader title="Page Information" />
+        <CardHeader title="Global Information" />
         <CardContent>
           <dl class="space-y-3">
             <div>
-              <dt class="text-xs font-medium text-gray-500 uppercase">Page ID</dt>
-              <dd class="text-sm text-gray-900 mt-1 font-mono">{{ pageId }}</dd>
+              <dt class="text-xs font-medium text-gray-500 uppercase">Schema</dt>
+              <dd class="text-sm text-gray-900 mt-1 font-mono">{{ schemaSlug }}</dd>
+            </div>
+            <div>
+              <dt class="text-xs font-medium text-gray-500 uppercase">Name</dt>
+              <dd class="text-sm text-gray-900 mt-1">{{ globalSchema?.name }}</dd>
             </div>
             <div>
               <dt class="text-xs font-medium text-gray-500 uppercase">Current Language</dt>
@@ -118,10 +101,10 @@
                 {{ new Date(currentTranslation.updatedAt || Date.now()).toLocaleDateString() }}
               </dd>
             </div>
-            <div v-if="translationSlug">
+            <div>
               <dt class="text-xs font-medium text-gray-500 uppercase">Public API</dt>
               <dd class="text-xs text-gray-700 mt-1 font-mono break-all">
-                /api/pages/{{ translationSlug }}?lang={{ currentLanguage }}
+                /api/globals/{{ schemaSlug }}?lang={{ currentLanguage }}
               </dd>
             </div>
           </dl>
@@ -136,39 +119,28 @@ import { ref, computed, onMounted, watch } from 'vue'
 import { useRoute } from 'vue-router'
 import { api } from '../utils/api'
 import { useConfig } from '../composables/useConfig'
-import { usePreview } from '../composables/usePreview'
 import FieldRenderer from '../components/FieldRenderer.vue'
-import { Card, CardHeader, CardContent, Button, Input } from '../components/ui'
+import { Card, CardHeader, CardContent, Button } from '../components/ui'
 
 const route = useRoute()
-const { config, refresh: refreshConfig, getPageSchema } = useConfig()
-const { isCreatingPreview, createPreview } = usePreview()
+const { config, getGlobalSchema, refresh: refreshConfig } = useConfig()
 
-const pageId = computed(() => route.params.id as string)
-const pageSchema = computed(() => getPageSchema(pageId.value))
+const schemaSlug = computed(() => route.params.slug as string)
+const globalSchema = computed(() => getGlobalSchema(schemaSlug.value))
 
-const page = ref<any>(null)
+const globalData = ref<any>(null)
 const currentLanguage = ref('')
+const mounted = ref(false)
 const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const error = ref('')
 const saveSuccess = ref(false)
-const mounted = ref(false)
 
-// Translation fields
-const translationTitle = ref('')
-const translationSlug = ref('')
 const translationFields = ref<Record<string, any>>({})
 
 const currentTranslation = computed(() => {
-  if (!page.value || !currentLanguage.value) return null
-  return page.value.translations[currentLanguage.value] || null
-})
-
-// Watch currentLanguage changes to load translation data
-watch(currentLanguage, () => {
-  loadTranslationData()
+  return globalData.value?.translations?.[currentLanguage.value]
 })
 
 onMounted(async () => {
@@ -176,47 +148,59 @@ onMounted(async () => {
   // Refresh config to ensure we have the latest schema
   await refreshConfig()
   currentLanguage.value = config.value?.defaultLanguage || 'en'
-  await loadPage()
-  loadTranslationData()
+  await loadGlobal()
 })
 
-function loadTranslationData() {
-  const translation = currentTranslation.value
+watch(currentLanguage, () => {
+  loadTranslation()
+})
 
-  // Title is the page schema name, not per-translation
-  if (pageSchema.value) {
-    translationTitle.value = pageSchema.value.name || ''
-  }
-
-  if (translation) {
-    translationSlug.value = translation.slug || ''
-    translationFields.value = translation.fields || {}
-  } else {
-    // Reset to empty for new translation
-    translationSlug.value = pageId.value // Default slug to page ID
-    translationFields.value = {}
-  }
-}
-
-async function loadPage() {
+async function loadGlobal() {
   isLoading.value = true
   error.value = ''
 
   try {
-    page.value = await api.getPage(pageId.value)
+    const result = await api.getGlobal(schemaSlug.value)
+    globalData.value = result
+    loadTranslation()
   } catch (err) {
-    // If page doesn't exist in database yet (404), create empty page structure
-    // This is normal for pages defined in config but without content yet
-    if (err instanceof Error && err.message.includes('not found')) {
-      page.value = {
-        id: pageId.value,
-        translations: {},
-      }
-    } else {
-      error.value = err instanceof Error ? err.message : 'Failed to load page'
-    }
+    error.value = err instanceof Error ? err.message : 'Failed to load global'
   } finally {
     isLoading.value = false
+  }
+}
+
+function loadTranslation() {
+  if (!globalData.value || !globalSchema.value) return
+
+  const translation = globalData.value.translations?.[currentLanguage.value]
+
+  // Initialize fields with defaults
+  translationFields.value = {}
+  for (const field of globalSchema.value.fields) {
+    translationFields.value[field.key] = translation?.fields?.[field.key] || getDefaultValueForField(field)
+  }
+}
+
+function getDefaultValueForField(field: any): any {
+  switch (field.type) {
+    case 'text':
+    case 'textarea':
+    case 'richtext':
+    case 'url':
+    case 'date':
+    case 'time':
+    case 'select':
+      return ''
+    case 'boolean':
+      return false
+    case 'image':
+      return { mediaId: '', alt: '' }
+    case 'gallery':
+    case 'repeater':
+      return []
+    default:
+      return null
   }
 }
 
@@ -225,71 +209,33 @@ function updateField(key: string, value: any) {
 }
 
 async function handleSave() {
-  if (!page.value || !pageSchema.value) return
-
   isSaving.value = true
   error.value = ''
   saveSuccess.value = false
 
   try {
-    // Update page schema name if changed
-    if (translationTitle.value !== pageSchema.value.name) {
-      await api.updatePageSchema(pageId.value, {
-        name: translationTitle.value,
-      })
-    }
-
-    // Construct proper TranslationContent structure
-    const translationContent = {
-      title: translationTitle.value,
-      slug: translationSlug.value,
+    await api.updateGlobalTranslation(schemaSlug.value, currentLanguage.value, {
       fields: translationFields.value,
-    }
-
-    await api.updatePageTranslation(
-      pageId.value,
-      currentLanguage.value,
-      translationContent
-    )
-
-    // Reload config and page to get updated data
-    await refreshConfig()
-    await loadPage()
-    loadTranslationData()
+    })
 
     saveSuccess.value = true
+
+    // Reload to get updated data
+    await loadGlobal()
+
+    // Hide success message after 3 seconds
     setTimeout(() => {
       saveSuccess.value = false
     }, 3000)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to save page'
+    error.value = err instanceof Error ? err.message : 'Failed to save global'
   } finally {
     isSaving.value = false
   }
 }
 
-async function handlePreview() {
-  if (!page.value) return
-
-  try {
-    await createPreview({
-      targetType: 'page',
-      targetId: pageId.value,
-      postType: null,
-      language: currentLanguage.value,
-      slug: translationSlug.value || pageId.value,
-      title: translationTitle.value || '',
-      fields: translationFields.value,
-    })
-  } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to create preview'
-  }
-}
-
 async function handleDeleteTranslation() {
-  if (!page.value || currentLanguage.value === config.value?.defaultLanguage) return
-
-  if (!confirm(`Are you sure you want to delete the ${currentLanguage.value.toUpperCase()} translation? This cannot be undone.`)) {
+  if (!confirm(`Are you sure you want to delete the ${currentLanguage.value} translation?`)) {
     return
   }
 
@@ -297,11 +243,13 @@ async function handleDeleteTranslation() {
   error.value = ''
 
   try {
-    await api.deletePageTranslation(pageId.value, currentLanguage.value)
+    await api.deleteGlobalTranslation(schemaSlug.value, currentLanguage.value)
+
     // Switch to default language
     currentLanguage.value = config.value?.defaultLanguage || 'en'
-    // Reload page to get updated translations
-    await loadPage()
+
+    // Reload global
+    await loadGlobal()
   } catch (err) {
     error.value = err instanceof Error ? err.message : 'Failed to delete translation'
   } finally {

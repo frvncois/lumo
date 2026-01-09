@@ -16,6 +16,7 @@ export function initializeSchema(db: Database.Database): void {
     CREATE TABLE IF NOT EXISTS page_schemas (
       id TEXT PRIMARY KEY,
       slug TEXT NOT NULL UNIQUE,
+      name TEXT NOT NULL,
       fields TEXT NOT NULL, -- JSON array of field definitions
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -31,6 +32,37 @@ export function initializeSchema(db: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
     );
+
+    -- Global schemas (managed by owners)
+    CREATE TABLE IF NOT EXISTS global_schemas (
+      slug TEXT PRIMARY KEY,
+      name TEXT NOT NULL,
+      fields TEXT NOT NULL, -- JSON array of field definitions
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+
+    -- Globals (one instance per schema)
+    CREATE TABLE IF NOT EXISTS globals (
+      id TEXT PRIMARY KEY,
+      schema_slug TEXT NOT NULL UNIQUE,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (schema_slug) REFERENCES global_schemas(slug) ON DELETE CASCADE
+    );
+
+    -- Global translations
+    CREATE TABLE IF NOT EXISTS global_translations (
+      id TEXT PRIMARY KEY,
+      global_id TEXT NOT NULL,
+      lang TEXT NOT NULL,
+      fields TEXT NOT NULL, -- JSON object
+      updated_at TEXT NOT NULL DEFAULT (datetime('now')),
+      FOREIGN KEY (global_id) REFERENCES globals(id) ON DELETE CASCADE,
+      UNIQUE(global_id, lang)
+    );
+
+    CREATE INDEX IF NOT EXISTS idx_global_translation_lang ON global_translations(lang);
 
     -- Pages
     CREATE TABLE IF NOT EXISTS pages (
@@ -157,6 +189,9 @@ export function dropSchema(db: Database.Database): void {
     DROP TABLE IF EXISTS post_translations;
     DROP TABLE IF EXISTS posts;
     DROP TABLE IF EXISTS post_type_schemas;
+    DROP TABLE IF EXISTS global_translations;
+    DROP TABLE IF EXISTS globals;
+    DROP TABLE IF EXISTS global_schemas;
     DROP TABLE IF EXISTS page_translations;
     DROP TABLE IF EXISTS pages;
     DROP TABLE IF EXISTS page_schemas;

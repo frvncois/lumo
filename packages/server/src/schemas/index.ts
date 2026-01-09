@@ -132,7 +132,7 @@ export const adminCreatePostSchema: FastifySchema = {
     properties: {
       type: { type: 'string', minLength: 1 },
       status: { type: 'string', enum: ['draft', 'published'] },
-      publishedAt: { type: ['string', 'null'], format: 'date-time' },
+      publishedAt: { type: ['string', 'null'] },
       position: { type: ['number', 'null'] },
     },
   },
@@ -144,7 +144,7 @@ export const adminUpdatePostSchema: FastifySchema = {
     type: 'object',
     properties: {
       status: { type: 'string', enum: ['draft', 'published'] },
-      publishedAt: { type: ['string', 'null'], format: 'date-time' },
+      publishedAt: { type: ['string', 'null'] },
       position: { type: ['number', 'null'] },
     },
   },
@@ -212,8 +212,8 @@ export const adminUpdatePageSchemaSchema: FastifySchema = {
   params: slugParam,
   body: {
     type: 'object',
-    required: ['fields'],
     properties: {
+      name: { type: 'string', minLength: 1 },
       fields: { type: 'array' },
     },
   },

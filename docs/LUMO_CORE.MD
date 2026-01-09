@@ -72,9 +72,10 @@ If Core rejects it, **no layer may override that decision**.
 
 ### 4.1 Content Types
 
-- Only two content types exist:
+- Three content types exist:
   - `Page`
   - `Post`
+  - `Global`
 - No additional content types may be created in V1
 - Core rejects unknown types
 
@@ -93,16 +94,18 @@ If a content mutation attempts to alter structure → **reject**.
 
 ---
 
-### 4.3 No Structured Repeaters
-
-Core **must reject**:
-- arrays of objects (except system primitives like `MediaReference`)
-- nested field groups
-- user-defined field schemas
+### 4.3 Repeater Fields
 
 Core **allows**:
-- arrays of primitives (e.g. `string[]`)
-- arrays of system primitives (e.g. `MediaReference[]` for galleries)
+- arrays of objects with constrained depth and size
+- repeater fields with sub-field schemas
+- nested repeaters up to MAX_REPEATER_DEPTH (5 levels)
+
+Core **enforces**:
+- maximum 50 items per repeater instance
+- maximum 5 levels of nesting
+- all repeater items validated against sub-field schema
+- repeater fields must have at least one sub-field
 
 This rule is enforced at validation time.
 
@@ -290,7 +293,55 @@ Core:
 
 ---
 
-## 13. What Core Will NEVER Do (V1)
+## 12. Repeater Field Validation
+
+### 12.1 Constraints
+
+| Constraint | Value |
+|------------|-------|
+| Maximum nesting depth | 5 |
+| Maximum items per repeater | 50 |
+
+### 12.2 Validation Rules
+
+1. Repeater value must be an array (or null if not required)
+2. Each array item must be an object
+3. Each item validated against sub-field schema
+4. Nested repeaters validated recursively
+5. Depth tracked during validation; exceeding MAX_DEPTH is an error
+
+### 12.3 Error Codes
+
+| Code | Meaning |
+|------|---------|
+| `REPEATER_MAX_DEPTH` | Nesting exceeds 5 levels |
+| `REPEATER_MAX_ITEMS` | Array exceeds 50 items |
+| `REPEATER_INVALID_ITEM` | Item is not an object |
+
+---
+
+## 13. Global Validation
+
+### 13.1 Global Schema Validation
+
+1. `slug` — Required, lowercase with hyphens, max 64 chars
+2. `name` — Required, non-empty string
+3. `fields` — Required, valid field definitions array
+
+### 13.2 Global Translation Validation
+
+1. `fields` — Validated against schema
+2. No `title` or `slug` (unlike Pages)
+
+### 13.3 Global Invariants
+
+* One Global instance per schema (enforced by UNIQUE constraint)
+* Global instance auto-created on first translation save
+* Deleting schema deletes instance and all translations
+
+---
+
+## 14. What Core Will NEVER Do (V1)
 
 - Infer structure
 - Auto-generate fields
@@ -303,7 +354,7 @@ If a feature requires Core to do any of the above, it is **out of scope**.
 
 ---
 
-## 14. Schema Evolution
+## 15. Schema Evolution
 
 Schemas can be modified at runtime by Owners.
 
@@ -328,11 +379,11 @@ Schemas can be modified at runtime by Owners.
 
 ## 15. Guiding Sentence
 
-> **If Core allows it, the system may persist it.  
+> **If Core allows it, the system may persist it.
 > If Core rejects it, the system must stop.**
 
 ---
 
-## 16. Status
+## 17. Status
 
 This document defines **Lumo Core V1**.

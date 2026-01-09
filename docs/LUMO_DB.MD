@@ -27,6 +27,9 @@ page_schemas        ← NEW
 posts
 post_translations
 post_type_schemas   ← NEW
+globals             ← NEW
+global_translations ← NEW
+global_schemas      ← NEW
 media
 previews
 users
@@ -177,9 +180,76 @@ Notes:
 
 ---
 
-## 5. Media
+## 5. Globals
 
-### 5.1 `media`
+### 5.1 `global_schemas`
+
+```sql
+CREATE TABLE global_schemas (
+  slug TEXT PRIMARY KEY,
+  name TEXT NOT NULL,
+  fields TEXT NOT NULL,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL
+);
+```
+
+Notes:
+
+* `slug` identifies the global (e.g., 'header', 'footer')
+* `name` is display name (e.g., 'Header', 'Footer')
+* `fields` stores JSON array of field definitions
+* Global schemas managed by Owners through admin UI
+
+---
+
+### 5.2 `globals`
+
+```sql
+CREATE TABLE globals (
+  id TEXT PRIMARY KEY,
+  schema_slug TEXT NOT NULL UNIQUE,
+  created_at DATETIME NOT NULL,
+  updated_at DATETIME NOT NULL,
+
+  FOREIGN KEY (schema_slug) REFERENCES global_schemas(slug)
+);
+```
+
+Notes:
+
+* UNIQUE on schema_slug enforces singleton pattern
+* One global instance per schema
+* Auto-created on first translation save
+
+---
+
+### 5.3 `global_translations`
+
+```sql
+CREATE TABLE global_translations (
+  id TEXT PRIMARY KEY,
+  global_id TEXT NOT NULL,
+  lang TEXT NOT NULL,
+  fields TEXT NOT NULL,
+  updated_at DATETIME NOT NULL,
+
+  FOREIGN KEY (global_id) REFERENCES globals(id) ON DELETE CASCADE,
+  UNIQUE(global_id, lang)
+);
+```
+
+Notes:
+
+* `fields` stores JSON content
+* No `title` or `slug` (unlike Pages)
+* Translations work same as Pages (per language)
+
+---
+
+## 6. Media
+
+### 6.1 `media`
 
 ```sql
 CREATE TABLE media (
@@ -204,7 +274,7 @@ Notes:
 
 ---
 
-### 5.2 `previews`
+### 6.2 `previews`
 
 ```sql
 CREATE TABLE previews (
@@ -236,9 +306,9 @@ Notes:
 
 ---
 
-## 6. Users & Collaboration
+## 7. Users & Collaboration
 
-### 6.1 `users`
+### 7.1 `users`
 
 ```sql
 CREATE TABLE users (
@@ -255,7 +325,7 @@ Notes:
 
 ---
 
-### 6.2 `collaborators`
+### 7.2 `collaborators`
 
 ```sql
 CREATE TABLE collaborators (
@@ -279,7 +349,7 @@ Multi-site deployments (Lumo Cloud) will require schema revision to support user
 
 ---
 
-## 7. Invites (Clarification)
+## 8. Invites (Clarification)
 
 Lumo V1 **does not persist invites in the database by default**.
 
@@ -302,7 +372,7 @@ A persistent `invites` table may be considered in V2 if needed.
 
 ---
 
-## 8. Previews (Clarification)
+## 9. Previews (Clarification)
 
 Unlike invites, **previews ARE stored in the database**.
 
@@ -321,7 +391,7 @@ See `previews` table in Section 5.2.
 
 ---
 
-## 9. Indexes (Performance Only)
+## 10. Indexes (Performance Only)
 
 ```sql
 CREATE INDEX idx_page_translations_page_id ON page_translations(page_id);

@@ -16,6 +16,10 @@ export type FieldType =
   | 'gallery'
   | 'url'
   | 'boolean'
+  | 'date'
+  | 'time'
+  | 'select'
+  | 'repeater'
 
 /**
  * Media Reference
@@ -27,6 +31,15 @@ export interface MediaReference {
 }
 
 /**
+ * Select Option
+ * Used for select field type
+ */
+export interface SelectOption {
+  label: string
+  value: string
+}
+
+/**
  * Field Definition
  */
 export interface FieldDefinition {
@@ -34,6 +47,8 @@ export interface FieldDefinition {
   type: FieldType
   label: string
   required: boolean
+  fields?: FieldDefinition[] // Only used when type === 'repeater'
+  options?: SelectOption[] // Only used when type === 'select'
 }
 
 /**
@@ -44,6 +59,7 @@ export type FieldValue =
   | boolean
   | MediaReference
   | MediaReference[]
+  | Record<string, unknown>[] // For repeater fields
   | null
   | undefined
 
@@ -57,6 +73,7 @@ export type Fields = Record<string, FieldValue>
  */
 export interface PageSchema {
   slug?: string // Present when loaded from runtime, absent in config file
+  name: string // Display name for the page schema
   fields: FieldDefinition[]
 }
 
@@ -75,6 +92,7 @@ export interface PostTypeSchema {
  */
 export interface PageSchemaInput {
   slug: string
+  name: string
   fields: FieldDefinition[]
 }
 
@@ -89,6 +107,48 @@ export interface PostTypeSchemaInput {
 }
 
 /**
+ * Global Schema Definition
+ */
+export interface GlobalSchema {
+  slug?: string
+  name: string
+  fields: FieldDefinition[]
+}
+
+/**
+ * Global Schema Input (for API operations)
+ */
+export interface GlobalSchemaInput {
+  slug: string
+  name: string
+  fields: FieldDefinition[]
+}
+
+/**
+ * Global Translation Content
+ */
+export interface GlobalTranslationContent {
+  fields: Fields
+  updatedAt: string
+}
+
+/**
+ * Global Translations
+ */
+export type GlobalTranslations = Record<string, GlobalTranslationContent>
+
+/**
+ * Global Entity
+ */
+export interface Global {
+  id: string
+  schemaSlug: string
+  translations: GlobalTranslations
+  createdAt: string
+  updatedAt: string
+}
+
+/**
  * Configuration Structure (lumo.config.ts)
  */
 export interface LumoConfig {
@@ -96,6 +156,7 @@ export interface LumoConfig {
   defaultLanguage: string
   pages?: Record<string, PageSchema> // Loaded from database, optional in file
   postTypes?: Record<string, PostTypeSchema> // Loaded from database, optional in file
+  globals?: Record<string, GlobalSchema> // Loaded from database, optional in file
   media: MediaConfig
 }
 

@@ -13,6 +13,10 @@ export const ALLOWED_FIELD_TYPES = [
   'gallery',
   'url',
   'boolean',
+  'date',
+  'time',
+  'select',
+  'repeater',
 ] as const
 
 /**
@@ -47,3 +51,13 @@ export const MAX_FIELD_KEY_LENGTH = 32
  * Maximum fields per schema
  */
 export const MAX_FIELDS_PER_SCHEMA = 50
+
+/**
+ * Maximum nesting depth for repeater fields
+ */
+export const MAX_REPEATER_DEPTH = 5
+
+/**
+ * Maximum items per repeater instance
+ */
+export const MAX_REPEATER_ITEMS = 50

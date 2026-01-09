@@ -9,16 +9,20 @@ import type {
   LumoConfig,
   PageSchema,
   PostTypeSchema,
+  GlobalSchema,
+  GlobalSchemaInput,
   FieldDefinition,
   ValidationErrorDetail,
+  ValidationResult,
 } from '../types.js'
-import { SchemaValidationError } from '../errors.js'
+import { SchemaValidationError, ErrorCodes } from '../errors.js'
 import {
   ALLOWED_FIELD_TYPES,
   RESERVED_KEYS,
   FIELD_KEY_PATTERN,
   MAX_FIELD_KEY_LENGTH,
   MAX_FIELDS_PER_SCHEMA,
+  MAX_REPEATER_DEPTH,
 } from './constants.js'
 
 /**
@@ -185,14 +189,25 @@ export function validatePostTypeSchema(
 }
 
 /**
- * Validate field definitions
+ * Validate field definitions (with repeater depth tracking)
  */
 export function validateFields(
   basePath: string,
-  fields: FieldDefinition[]
+  fields: FieldDefinition[],
+  depth: number = 0
 ): ValidationErrorDetail[] {
   const errors: ValidationErrorDetail[] = []
   const seenKeys = new Set<string>()
+
+  // Check nesting depth for repeater fields
+  if (depth > MAX_REPEATER_DEPTH) {
+    errors.push({
+      path: basePath,
+      reason: ErrorCodes.REPEATER_MAX_DEPTH,
+      message: `Repeater nesting exceeds maximum depth of ${MAX_REPEATER_DEPTH}`,
+    })
+    return errors
+  }
 
   for (let i = 0; i < fields.length; i++) {
     const field = fields[i]
@@ -268,7 +283,91 @@ export function validateFields(
         reason: 'Field required must be a boolean',
       })
     }
+
+    // Validate select options
+    if (field.type === 'select') {
+      if (!field.options || !Array.isArray(field.options) || field.options.length === 0) {
+        errors.push({
+          path: `${fieldPath}.options`,
+          reason: ErrorCodes.VALIDATION_ERROR,
+          message: 'Select field must have at least one option',
+        })
+      } else {
+        // Validate each option has label and value
+        for (let optionIndex = 0; optionIndex < field.options.length; optionIndex++) {
+          const option = field.options[optionIndex]
+          if (!option.label || typeof option.label !== 'string' || option.label.trim() === '') {
+            errors.push({
+              path: `${fieldPath}.options[${optionIndex}].label`,
+              reason: ErrorCodes.VALIDATION_ERROR,
+              message: 'Option label is required',
+            })
+          }
+          if (!option.value || typeof option.value !== 'string' || option.value.trim() === '') {
+            errors.push({
+              path: `${fieldPath}.options[${optionIndex}].value`,
+              reason: ErrorCodes.VALIDATION_ERROR,
+              message: 'Option value is required',
+            })
+          }
+        }
+      }
+    }
+
+    // Validate repeater sub-fields
+    if (field.type === 'repeater') {
+      if (!field.fields || !Array.isArray(field.fields) || field.fields.length === 0) {
+        errors.push({
+          path: `${fieldPath}.fields`,
+          reason: ErrorCodes.REPEATER_NO_FIELDS,
+          message: 'Repeater field must have at least one sub-field',
+        })
+      } else {
+        // Recursively validate sub-fields with incremented depth
+        const subFieldErrors = validateFields(`${fieldPath}`, field.fields, depth + 1)
+        errors.push(...subFieldErrors)
+      }
+    }
   }
 
   return errors
+}
+
+/**
+ * Validate global schema
+ */
+export function validateGlobalSchema(schema: GlobalSchemaInput): ValidationResult<GlobalSchemaInput> {
+  const errors: ValidationErrorDetail[] = []
+
+  if (!schema.name || typeof schema.name !== 'string' || schema.name.trim().length === 0) {
+    errors.push({
+      path: 'name',
+      reason: ErrorCodes.VALIDATION_ERROR,
+      message: 'Global name is required',
+    })
+  }
+
+  if (!schema.fields || !Array.isArray(schema.fields)) {
+    errors.push({
+      path: 'fields',
+      reason: ErrorCodes.VALIDATION_ERROR,
+      message: 'Fields array is required',
+    })
+  } else {
+    if (schema.fields.length > MAX_FIELDS_PER_SCHEMA) {
+      errors.push({
+        path: 'fields',
+        reason: ErrorCodes.TOO_MANY_FIELDS,
+        message: `Maximum ${MAX_FIELDS_PER_SCHEMA} fields allowed`,
+      })
+    }
+    const fieldErrors = validateFields('global', schema.fields)
+    errors.push(...fieldErrors)
+  }
+
+  if (errors.length > 0) {
+    return { success: false, errors }
+  }
+
+  return { success: true, data: schema }
 }

@@ -135,6 +135,38 @@ function validateFieldType(
       }
       break
 
+    case 'date':
+    case 'time':
+      if (typeof value !== 'string') {
+        errors.push({
+          path,
+          reason: ErrorCodes.INVALID_FIELD_TYPE,
+          message: `Field "${key}" must be a string`,
+        })
+      }
+      break
+
+    case 'select':
+      if (typeof value !== 'string') {
+        errors.push({
+          path,
+          reason: ErrorCodes.INVALID_FIELD_TYPE,
+          message: `Field "${key}" must be a string`,
+        })
+      }
+      // Optionally validate against allowed options if defined
+      if (fieldDef.options && Array.isArray(fieldDef.options) && value !== '') {
+        const validValues = fieldDef.options.map(opt => opt.value)
+        if (!validValues.includes(value as string)) {
+          errors.push({
+            path,
+            reason: ErrorCodes.INVALID_FIELD_TYPE,
+            message: `Field "${key}" must be one of: ${validValues.join(', ')}`,
+          })
+        }
+      }
+      break
+
     case 'image':
       const mediaResult = validateMediaRef(value, `fields.${key}`)
       if (!mediaResult.success) {

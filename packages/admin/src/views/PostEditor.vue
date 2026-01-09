@@ -211,7 +211,7 @@ const postId = computed(() => route.params.id as string)
 const postType = computed(() => route.params.type as string)
 const postTypeSchema = computed(() => getPostTypeSchema(postType.value))
 
-const post = ref<any>(null)
+const post = ref<any>({ status: 'draft', position: null, translations: {} })
 const currentLanguage = ref('')
 const publishedDate = ref('')
 const isLoading = ref(true)
@@ -221,6 +221,7 @@ const isDeletingTranslation = ref(false)
 const error = ref('')
 const saveSuccess = ref(false)
 const mounted = ref(false)
+const isUpdatingDate = ref(false)
 
 // Translation fields
 const translationTitle = ref('')
@@ -239,6 +240,8 @@ const showPositionField = computed(() => {
 watch(
   () => post.value?.publishedAt,
   (value) => {
+    if (isUpdatingDate.value) return
+    isUpdatingDate.value = true
     if (value) {
       // Convert ISO string to datetime-local format
       const date = new Date(value)
@@ -248,13 +251,17 @@ watch(
       const now = new Date()
       publishedDate.value = now.toISOString().slice(0, 16)
     }
+    isUpdatingDate.value = false
   },
   { immediate: true }
 )
 
 watch(publishedDate, (value) => {
+  if (isUpdatingDate.value) return
   if (post.value && value) {
+    isUpdatingDate.value = true
     post.value.publishedAt = new Date(value).toISOString()
+    isUpdatingDate.value = false
   }
 })
 
@@ -281,8 +288,24 @@ function loadTranslationData() {
   } else {
     // For new translations, set defaults
     translationTitle.value = 'Untitled'
-    translationSlug.value = postId.value // Default slug to post ID
-    translationFields.value = {}
+    // Convert postId to slug-friendly format (lowercase, replace underscore with hyphen)
+    translationSlug.value = postId.value.toLowerCase().replace(/_/g, '-')
+
+    // Initialize translationFields with defaults only for specific types
+    const fieldDefaults: Record<string, any> = {}
+    if (postTypeSchema.value?.fields) {
+      for (const field of postTypeSchema.value.fields) {
+        // Only initialize fields that need non-empty defaults
+        if (field.type === 'boolean') {
+          fieldDefaults[field.key] = false
+        } else if (field.type === 'repeater') {
+          fieldDefaults[field.key] = []
+        }
+        // Don't initialize text/other fields - leave them undefined
+        // FieldRenderer will handle undefined values, and updateField will add them as user types
+      }
+    }
+    translationFields.value = fieldDefaults
   }
 }
 
@@ -298,7 +321,11 @@ async function loadPost() {
       post.value.publishedAt = new Date().toISOString()
     }
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load post'
+    // If post doesn't exist yet (new post), set id, type, and publishedAt
+    post.value.id = postId.value
+    post.value.type = postType.value
+    post.value.publishedAt = new Date().toISOString()
+    error.value = ''
   } finally {
     isLoading.value = false
   }
@@ -310,6 +337,8 @@ function updateField(key: string, value: any) {
 
 async function handleSave() {
   if (!post.value || !postTypeSchema.value) return
+
+  console.log('Post type schema:', JSON.stringify(postTypeSchema.value, null, 2))
 
   // Validate required fields before saving
   if (!translationTitle.value || !translationTitle.value.trim()) {
@@ -340,6 +369,16 @@ async function handleSave() {
       fields: translationFields.value,
     }
 
+    console.log('Saving translation:', {
+      postId: postId.value,
+      language: currentLanguage.value,
+      slug: translationSlug.value,
+      title: translationTitle.value,
+      fields: translationFields.value
+    })
+    console.log('Fields as JSON:', JSON.stringify(translationFields.value, null, 2))
+    console.log('Translation content:', JSON.stringify(translationContent, null, 2))
+
     // Save translation
     await api.updatePostTranslation(
       postId.value,
@@ -355,7 +394,13 @@ async function handleSave() {
     setTimeout(() => {
       saveSuccess.value = false
     }, 3000)
-  } catch (err) {
+  } catch (err: any) {
+    console.error('Save failed:', err)
+    console.error('Error details:', err.details)
+    console.error('Error message:', err.message)
+    if (err.details) {
+      console.error('Validation errors:', JSON.stringify(err.details, null, 2))
+    }
     error.value = err instanceof Error ? err.message : 'Failed to save post'
   } finally {
     isSaving.value = false

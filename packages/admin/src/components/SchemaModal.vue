@@ -60,6 +60,14 @@
           </div>
         </div>
 
+        <!-- Built-in Fields Info (Post Types Only) -->
+        <div v-if="type === 'postType'" class="mb-4 p-3 bg-blue-50 border border-blue-200 rounded text-sm">
+          <p class="text-blue-800">
+            <strong>Note:</strong> Post types automatically include a built-in <span class="font-mono">title</span> field.
+            Define additional fields below.
+          </p>
+        </div>
+
         <!-- Fields -->
         <div class="mb-4">
           <div class="flex justify-between items-center mb-2">

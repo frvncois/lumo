@@ -321,14 +321,13 @@ function insertPostTranslation(
   })
 
   db.prepare(`
-    INSERT INTO post_translations (post_id, language, slug, content, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?)
+    INSERT INTO post_translations (post_id, language, slug, content, updated_at)
+    VALUES (?, ?, ?, ?, ?)
   `).run(
     postId,
     language,
     content.slug,
     contentJson,
-    now,
     now
   )
 }

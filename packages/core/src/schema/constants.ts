@@ -17,6 +17,7 @@ export const ALLOWED_FIELD_TYPES = [
   'time',
   'select',
   'repeater',
+  'reference',
 ] as const
 
 /**

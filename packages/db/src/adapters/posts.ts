@@ -83,6 +83,7 @@ export function getPostById(db: Database.Database, id: string): Post | null {
       slug: row.slug,
       title: content.title,
       fields: content.fields,
+      seo: content.seo,
       updatedAt: row.updated_at,
     }
   }
@@ -286,6 +287,7 @@ export function upsertPostTranslation(
   const contentJson = JSON.stringify({
     title: content.title,
     fields: content.fields,
+    seo: content.seo || {},
   })
 
   if (existing) {
@@ -318,6 +320,7 @@ function insertPostTranslation(
   const contentJson = JSON.stringify({
     title: content.title,
     fields: content.fields,
+    seo: content.seo || {},
   })
 
   db.prepare(`

@@ -314,6 +314,32 @@ export function validateFields(
       }
     }
 
+    // Validate reference configuration
+    if (field.type === 'reference') {
+      if (!field.reference || typeof field.reference !== 'object') {
+        errors.push({
+          path: `${fieldPath}.reference`,
+          reason: ErrorCodes.VALIDATION_ERROR,
+          message: 'Reference field must have a reference configuration',
+        })
+      } else {
+        if (!field.reference.postType || typeof field.reference.postType !== 'string') {
+          errors.push({
+            path: `${fieldPath}.reference.postType`,
+            reason: ErrorCodes.VALIDATION_ERROR,
+            message: 'Reference field must specify a postType',
+          })
+        }
+        if (field.reference.multiple !== undefined && typeof field.reference.multiple !== 'boolean') {
+          errors.push({
+            path: `${fieldPath}.reference.multiple`,
+            reason: ErrorCodes.VALIDATION_ERROR,
+            message: 'Reference multiple must be a boolean',
+          })
+        }
+      }
+    }
+
     // Validate repeater sub-fields
     if (field.type === 'repeater') {
       if (!field.fields || !Array.isArray(field.fields) || field.fields.length === 0) {

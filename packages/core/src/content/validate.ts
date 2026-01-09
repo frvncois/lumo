@@ -186,6 +186,40 @@ function validateFieldType(
       errors.push(...repeaterErrors)
       break
 
+    case 'reference':
+      const isMultiple = fieldDef.reference?.multiple === true
+
+      if (isMultiple) {
+        // Multiple: expect array of post IDs
+        if (!Array.isArray(value)) {
+          errors.push({
+            path,
+            reason: ErrorCodes.INVALID_FIELD_TYPE,
+            message: `Field "${key}" must be an array of post IDs`,
+          })
+        } else {
+          for (let i = 0; i < value.length; i++) {
+            if (typeof value[i] !== 'string') {
+              errors.push({
+                path: `${path}[${i}]`,
+                reason: ErrorCodes.INVALID_FIELD_TYPE,
+                message: `Reference ID must be a string`,
+              })
+            }
+          }
+        }
+      } else {
+        // Single: expect string (post ID) or null
+        if (value !== null && typeof value !== 'string') {
+          errors.push({
+            path,
+            reason: ErrorCodes.INVALID_FIELD_TYPE,
+            message: `Field "${key}" must be a post ID string or null`,
+          })
+        }
+      }
+      break
+
     default:
       errors.push({
         path,

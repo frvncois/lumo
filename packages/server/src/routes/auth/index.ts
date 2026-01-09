@@ -18,6 +18,9 @@ import {
   createCollaborator,
   getCollaboratorByUserId,
   getPasswordChangedAt,
+  getSetting,
+  setSetting,
+  updatePassword,
 } from '@lumo/db'
 import { generateId } from '../../utils/tokens.js'
 import { hashPassword, verifyPassword, validatePassword } from '../../utils/password.js'
@@ -25,6 +28,18 @@ import { errors } from '../../utils/errors.js'
 import { SessionConfig, UserRoles } from '../../constants.js'
 import { authSetupSchema, authLoginSchema } from '../../schemas/index.js'
 import { logAuditEvent } from '../../utils/audit.js'
+import crypto from 'node:crypto'
+
+// Helper functions
+function generateProjectId(): string {
+  const id = crypto.randomBytes(8).toString('hex')
+  return `proj_${id}`
+}
+
+function generateProjectKey(): string {
+  const key = crypto.randomBytes(16).toString('hex')
+  return key
+}
 
 export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   // Stricter rate limit for auth endpoints
@@ -47,7 +62,10 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
    * Get LUMO configuration (languages, pages, postTypes, globals)
    */
   app.get('/api/config', async () => {
+    const projectName = getSetting(app.db, 'projectName')
+
     return {
+      projectName: projectName || null,
       languages: app.config.languages,
       defaultLanguage: app.config.defaultLanguage,
       pages: app.config.pages,
@@ -73,16 +91,21 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
    * Initial setup - create first user with owner role
    */
   app.post<{
-    Body: { email: string; password: string }
+    Body: { projectName: string; email: string; password: string }
   }>('/api/auth/setup', { ...authRateLimit, schema: authSetupSchema }, async (request, reply) => {
-    const { email, password } = request.body
+    const { projectName, email, password } = request.body
 
     // Check if setup is needed
     if (hasAnyUsers(app.db)) {
       return errors.forbidden(reply, 'Setup already completed')
     }
 
-    // Validate inputs
+    // Validate project name
+    if (!projectName || typeof projectName !== 'string' || projectName.trim().length === 0) {
+      return errors.validation(reply, 'Project name is required')
+    }
+
+    // Validate email
     if (!email || typeof email !== 'string') {
       return errors.validation(reply, 'Email is required')
     }
@@ -91,6 +114,15 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     if (!passwordValidation.valid) {
       return errors.validation(reply, passwordValidation.error || 'Invalid password')
     }
+
+    // Generate Project ID and Project Key
+    const projectId = generateProjectId()
+    const projectKey = generateProjectKey()
+
+    // Save project settings
+    setSetting(app.db, 'projectName', projectName.trim())
+    setSetting(app.db, 'projectId', projectId)
+    setSetting(app.db, 'projectKey', projectKey)
 
     // Create user with password
     const userId = generateId('user')
@@ -125,6 +157,11 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         id: user.id,
         email: user.email,
         role: collaborator.role,
+      },
+      project: {
+        id: projectId,
+        key: projectKey,
+        name: projectName.trim(),
       },
     }
   })
@@ -221,6 +258,56 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       email: user.email,
       role: user.role,
     }
+  })
+
+  /**
+   * PUT /api/me/password
+   * Change current user's password
+   */
+  app.put<{
+    Body: {
+      currentPassword: string
+      newPassword: string
+    }
+  }>('/api/me/password', { preHandler: requireAuth }, async (request, reply) => {
+    const { user } = request as AuthenticatedRequest
+    const { currentPassword, newPassword } = request.body
+
+    // Validate inputs
+    if (!currentPassword || !newPassword) {
+      return errors.validation(reply, 'Current password and new password are required')
+    }
+
+    // Validate new password
+    const passwordValidation = validatePassword(newPassword)
+    if (!passwordValidation.valid) {
+      return errors.validation(reply, passwordValidation.error || 'Invalid password')
+    }
+
+    // Get user with password hash
+    const dbUser = getUserByEmail(app.db, user.email)
+    if (!dbUser || !dbUser.passwordHash) {
+      return errors.unauthorized(reply, 'Invalid credentials')
+    }
+
+    // Verify current password
+    const isValid = await verifyPassword(currentPassword, dbUser.passwordHash)
+    if (!isValid) {
+      return errors.unauthorized(reply, 'Current password is incorrect')
+    }
+
+    // Hash new password and update
+    const newPasswordHash = await hashPassword(newPassword)
+    updatePassword(app.db, user.id, newPasswordHash)
+
+    logAuditEvent(app, {
+      event: 'PASSWORD_CHANGED',
+      userId: user.id,
+      ip: request.ip,
+      userAgent: request.headers['user-agent'],
+    })
+
+    return { ok: true }
   })
 
   /**

@@ -1,14 +1,5 @@
 <template>
   <div>
-    <!-- Error Messages -->
-    <div v-if="error" class="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 mb-6">
-      {{ error }}
-    </div>
-
-    <div v-if="saveSuccess" class="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 mb-6">
-      Page saved successfully!
-    </div>
-
     <div v-if="isLoading" class="text-gray-600">Loading page...</div>
 
     <div v-else-if="page && pageSchema" class="space-y-6">
@@ -22,6 +13,30 @@
             variant="ghost"
             size="lg"
           />
+        </CardContent>
+      </Card>
+
+      <!-- No Fields Schema Setup Card -->
+      <Card v-if="!pageSchema.fields || pageSchema.fields.length === 0">
+        <CardContent>
+          <div class="text-center py-8">
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Set up your page schema</h3>
+            <p class="text-gray-600 mb-4">
+              Add fields to this page schema to start creating content.
+            </p>
+            <Button
+              @click="goToSchemaEditor"
+              variant="default"
+              size="sm"
+            >
+              Go to Schema Editor
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -41,6 +56,13 @@
           />
         </CardContent>
       </Card>
+
+      <!-- SEO Card -->
+      <SEOCard
+        v-model="translationSeo"
+        :fallback-title="translationTitle"
+        :fallback-slug="translationSlug"
+      />
     </div>
 
     <!-- Teleport Header Actions -->
@@ -133,16 +155,22 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../utils/api'
 import { useConfig } from '../composables/useConfig'
 import { usePreview } from '../composables/usePreview'
+import { useDialog } from '../composables/useDialog'
+import { useToast } from '../composables/useToast'
 import FieldRenderer from '../components/FieldRenderer.vue'
+import SEOCard from '../components/SEOCard.vue'
 import { Card, CardHeader, CardContent, Button, Input } from '../components/ui'
 
 const route = useRoute()
+const router = useRouter()
 const { config, refresh: refreshConfig, getPageSchema } = useConfig()
 const { isCreatingPreview, createPreview } = usePreview()
+const dialog = useDialog()
+const toast = useToast()
 
 const pageId = computed(() => route.params.id as string)
 const pageSchema = computed(() => getPageSchema(pageId.value))
@@ -152,14 +180,13 @@ const currentLanguage = ref('')
 const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
-const error = ref('')
-const saveSuccess = ref(false)
 const mounted = ref(false)
 
 // Translation fields
 const translationTitle = ref('')
 const translationSlug = ref('')
 const translationFields = ref<Record<string, any>>({})
+const translationSeo = ref<any>({})
 
 const currentTranslation = computed(() => {
   if (!page.value || !currentLanguage.value) return null
@@ -191,16 +218,17 @@ function loadTranslationData() {
   if (translation) {
     translationSlug.value = translation.slug || ''
     translationFields.value = translation.fields || {}
+    translationSeo.value = translation.seo || {}
   } else {
     // Reset to empty for new translation
     translationSlug.value = pageId.value // Default slug to page ID
     translationFields.value = {}
+    translationSeo.value = {}
   }
 }
 
 async function loadPage() {
   isLoading.value = true
-  error.value = ''
 
   try {
     page.value = await api.getPage(pageId.value)
@@ -213,7 +241,7 @@ async function loadPage() {
         translations: {},
       }
     } else {
-      error.value = err instanceof Error ? err.message : 'Failed to load page'
+      toast.error(err instanceof Error ? err.message : 'Failed to load page')
     }
   } finally {
     isLoading.value = false
@@ -228,8 +256,6 @@ async function handleSave() {
   if (!page.value || !pageSchema.value) return
 
   isSaving.value = true
-  error.value = ''
-  saveSuccess.value = false
 
   try {
     // Update page schema name if changed
@@ -244,6 +270,7 @@ async function handleSave() {
       title: translationTitle.value,
       slug: translationSlug.value,
       fields: translationFields.value,
+      seo: translationSeo.value,
     }
 
     await api.updatePageTranslation(
@@ -257,12 +284,9 @@ async function handleSave() {
     await loadPage()
     loadTranslationData()
 
-    saveSuccess.value = true
-    setTimeout(() => {
-      saveSuccess.value = false
-    }, 3000)
+    toast.success('Page saved successfully!')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to save page'
+    toast.error(err instanceof Error ? err.message : 'Failed to save page')
   } finally {
     isSaving.value = false
   }
@@ -282,19 +306,25 @@ async function handlePreview() {
       fields: translationFields.value,
     })
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to create preview'
+    toast.error(err instanceof Error ? err.message : 'Failed to create preview')
   }
 }
 
 async function handleDeleteTranslation() {
   if (!page.value || currentLanguage.value === config.value?.defaultLanguage) return
 
-  if (!confirm(`Are you sure you want to delete the ${currentLanguage.value.toUpperCase()} translation? This cannot be undone.`)) {
-    return
-  }
+  const confirmed = await dialog.confirm(
+    `Are you sure you want to delete the ${currentLanguage.value.toUpperCase()} translation? This cannot be undone.`,
+    {
+      title: 'Delete Translation',
+      confirmText: 'Delete',
+      variant: 'danger'
+    }
+  )
+
+  if (!confirmed) return
 
   isDeleting.value = true
-  error.value = ''
 
   try {
     await api.deletePageTranslation(pageId.value, currentLanguage.value)
@@ -302,10 +332,15 @@ async function handleDeleteTranslation() {
     currentLanguage.value = config.value?.defaultLanguage || 'en'
     // Reload page to get updated translations
     await loadPage()
+    toast.success('Translation deleted successfully!')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to delete translation'
+    toast.error(err instanceof Error ? err.message : 'Failed to delete translation')
   } finally {
     isDeleting.value = false
   }
+}
+
+function goToSchemaEditor() {
+  router.push({ path: '/admin/settings', query: { tab: 'schema' } })
 }
 </script>

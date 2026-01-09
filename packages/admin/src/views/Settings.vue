@@ -32,11 +32,15 @@
 </template>
 
 <script setup lang="ts">
-import { ref, computed } from 'vue'
+import { ref, computed, onMounted, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
 import SettingsGeneral from '../components/settings/SettingsGeneral.vue'
 import SettingsSchema from '../components/settings/SettingsSchema.vue'
 import SettingsAPI from '../components/settings/SettingsAPI.vue'
 import SettingsUsers from '../components/settings/SettingsUsers.vue'
+
+const route = useRoute()
+const router = useRouter()
 
 const tabs = [
   { id: 'general', label: 'General' },
@@ -46,6 +50,19 @@ const tabs = [
 ]
 
 const currentTab = ref('general')
+
+// Initialize tab from query parameter
+onMounted(() => {
+  const tabParam = route.query.tab as string
+  if (tabParam && tabs.some(t => t.id === tabParam)) {
+    currentTab.value = tabParam
+  }
+})
+
+// Update URL when tab changes
+watch(currentTab, (newTab) => {
+  router.replace({ query: { tab: newTab } })
+})
 
 const currentTabComponent = computed(() => {
   switch (currentTab.value) {

@@ -1,33 +1,20 @@
 <template>
   <div>
-    <div v-if="error" class="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 mb-6">
-      {{ error }}
-    </div>
-
-    <div v-if="uploadSuccess" class="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 mb-6">
-      Media uploaded successfully!
-    </div>
-
-    <div v-if="isUploading" class="bg-blue-50 border border-blue-200 rounded-md p-4 text-blue-800 mb-6">
-      Uploading...
-    </div>
-
     <div v-if="isLoading" class="text-gray-600">Loading media...</div>
 
     <Card v-else>
       <CardHeader :title="currentFilterLabel">
         <template #actions>
-          <label class="cursor-pointer">
-            <Button variant="default" size="sm">
-              Upload Media
-            </Button>
-            <input
-              type="file"
-              @change="handleFileSelect"
-              accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-              class="hidden"
-            />
-          </label>
+          <Button variant="default" size="sm" @click="triggerFileUpload">
+            Upload Media
+          </Button>
+          <input
+            ref="fileInputRef"
+            type="file"
+            @change="handleFileSelect"
+            accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+            class="hidden"
+          />
         </template>
       </CardHeader>
       <CardContent>
@@ -52,17 +39,20 @@
                   Download
                 </Button>
               </a>
-              <label class="cursor-pointer" @click.stop>
-                <Button variant="outline" size="sm">
-                  Replace
-                </Button>
-                <input
-                  type="file"
-                  @change="handleReplace(item, $event)"
-                  accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
-                  class="hidden"
-                />
-              </label>
+              <Button
+                variant="outline"
+                size="sm"
+                @click.stop="triggerReplaceFile(item.id)"
+              >
+                Replace
+              </Button>
+              <input
+                :ref="el => setReplaceInputRef(item.id, el)"
+                type="file"
+                @change="handleReplace(item, $event)"
+                accept="image/*,video/*,audio/*,.pdf,.doc,.docx"
+                class="hidden"
+              />
               <Button
                 @click.stop="handleDelete(item)"
                 variant="outline"
@@ -149,14 +139,19 @@
 import { ref, computed, onMounted, watch } from 'vue'
 import { Card, CardHeader, CardContent, Button, List, ListItem } from '../components/ui'
 import { api } from '../utils/api'
+import { useDialog } from '../composables/useDialog'
+import { useToast } from '../composables/useToast'
+
+const dialog = useDialog()
+const toast = useToast()
 
 const media = ref<any[]>([])
 const filterType = ref<'all' | 'image' | 'video' | 'audio' | 'document'>('all')
 const isLoading = ref(true)
 const isUploading = ref(false)
-const error = ref('')
-const uploadSuccess = ref(false)
 const mounted = ref(false)
+const fileInputRef = ref<HTMLInputElement | null>(null)
+const replaceInputRefs = ref<Map<string, HTMLInputElement>>(new Map())
 
 const filteredMedia = computed(() => {
   if (filterType.value === 'all') return media.value
@@ -185,17 +180,31 @@ onMounted(async () => {
 
 async function loadMedia() {
   isLoading.value = true
-  error.value = ''
 
   try {
     const options = filterType.value === 'all' ? {} : { type: filterType.value }
     const result = await api.listMedia(options)
     media.value = result.items
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load media'
+    toast.error(err instanceof Error ? err.message : 'Failed to load media')
   } finally {
     isLoading.value = false
   }
+}
+
+function triggerFileUpload() {
+  fileInputRef.value?.click()
+}
+
+function setReplaceInputRef(itemId: string, el: any) {
+  if (el) {
+    replaceInputRefs.value.set(itemId, el as HTMLInputElement)
+  }
+}
+
+function triggerReplaceFile(itemId: string) {
+  const input = replaceInputRefs.value.get(itemId)
+  input?.click()
 }
 
 async function handleFileSelect(event: Event) {
@@ -205,22 +214,16 @@ async function handleFileSelect(event: Event) {
   if (!file) return
 
   isUploading.value = true
-  error.value = ''
-  uploadSuccess.value = false
 
   try {
     await api.uploadMedia(file)
-    uploadSuccess.value = true
     await loadMedia()
-
-    setTimeout(() => {
-      uploadSuccess.value = false
-    }, 3000)
+    toast.success('Media uploaded successfully!')
 
     // Reset file input
     target.value = ''
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to upload media'
+    toast.error(err instanceof Error ? err.message : 'Failed to upload media')
   } finally {
     isUploading.value = false
   }
@@ -232,45 +235,55 @@ async function handleReplace(item: any, event: Event) {
 
   if (!file) return
 
-  if (!confirm(`Replace this media file? The URL will stay the same but the content will be updated.`)) {
+  const confirmed = await dialog.confirm(
+    'Replace this media file? The URL will stay the same but the content will be updated.',
+    {
+      title: 'Replace Media',
+      confirmText: 'Replace',
+      variant: 'primary'
+    }
+  )
+
+  if (!confirmed) {
     target.value = ''
     return
   }
 
   isUploading.value = true
-  error.value = ''
-  uploadSuccess.value = false
 
   try {
     await api.replaceMedia(item.id, file)
-    uploadSuccess.value = true
     await loadMedia()
-
-    setTimeout(() => {
-      uploadSuccess.value = false
-    }, 3000)
+    toast.success('Media replaced successfully!')
 
     // Reset file input
     target.value = ''
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to replace media'
+    toast.error(err instanceof Error ? err.message : 'Failed to replace media')
   } finally {
     isUploading.value = false
   }
 }
 
 async function handleDelete(item: any) {
-  if (!confirm(`Are you sure you want to delete this media? This cannot be undone.`)) {
-    return
-  }
+  const confirmed = await dialog.confirm(
+    'Are you sure you want to delete this media? This cannot be undone.',
+    {
+      title: 'Delete Media',
+      confirmText: 'Delete',
+      variant: 'danger'
+    }
+  )
 
-  error.value = ''
+  if (!confirmed) return
+
 
   try {
     await api.deleteMedia(item.id)
     await loadMedia()
+    toast.success('Media deleted successfully!')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to delete media'
+    toast.error(err instanceof Error ? err.message : 'Failed to delete media')
   }
 }
 

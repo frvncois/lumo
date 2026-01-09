@@ -1,9 +1,9 @@
 <template>
-  <div class="px-6 py-4 border-t border-gray-200 bg-gray-50">
+  <div class="p-4">
     <div v-if="$slots.default" class="flex items-center justify-between">
       <slot />
     </div>
-    <div v-else-if="actions" class="flex items-center justify-end gap-2">
+    <div v-else-if="$slots.actions || actions" class="flex items-center justify-end gap-2">
       <slot name="actions">
         <button
           v-for="action in actions"

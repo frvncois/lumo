@@ -20,6 +20,7 @@ export type FieldType =
   | 'time'
   | 'select'
   | 'repeater'
+  | 'reference'
 
 /**
  * Media Reference
@@ -40,6 +41,15 @@ export interface SelectOption {
 }
 
 /**
+ * Reference Configuration
+ * Used for reference field type
+ */
+export interface ReferenceConfig {
+  postType: string // slug of the post type to reference
+  multiple?: boolean // true = array of IDs, false = single ID
+}
+
+/**
  * Field Definition
  */
 export interface FieldDefinition {
@@ -49,6 +59,7 @@ export interface FieldDefinition {
   required: boolean
   fields?: FieldDefinition[] // Only used when type === 'repeater'
   options?: SelectOption[] // Only used when type === 'select'
+  reference?: ReferenceConfig // Only used when type === 'reference'
 }
 
 /**
@@ -171,12 +182,41 @@ export interface MediaConfig {
 }
 
 /**
+ * General SEO Settings (project-wide)
+ */
+export interface GeneralSEO {
+  siteTitle?: string
+  siteSeparator?: string // e.g. " | " or " - "
+  siteDescription?: string
+  defaultOgImage?: string // mediaId
+  twitterHandle?: string // @handle
+  googleVerification?: string
+  robots?: string // robots.txt content
+}
+
+/**
+ * Per-page/post SEO fields
+ */
+export interface SEOFields {
+  metaTitle?: string
+  metaDescription?: string
+  ogTitle?: string
+  ogDescription?: string
+  ogImage?: string // mediaId
+  twitterCard?: 'summary' | 'summary_large_image'
+  canonicalUrl?: string
+  noIndex?: boolean
+  noFollow?: boolean
+}
+
+/**
  * Translation Content
  */
 export interface TranslationContent {
   slug: string
   title: string
   fields: Fields
+  seo?: SEOFields
   updatedAt: string
 }
 

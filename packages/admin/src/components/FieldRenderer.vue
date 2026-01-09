@@ -128,6 +128,14 @@
       </option>
     </select>
 
+    <!-- Reference Field -->
+    <ReferenceField
+      v-else-if="field.type === 'reference'"
+      :field="field"
+      :modelValue="modelValue"
+      @update:modelValue="emit('update:modelValue', $event)"
+    />
+
     <div v-else class="text-red-600 text-sm">
       Unknown field type: {{ field.type }}
     </div>
@@ -139,6 +147,7 @@ import { defineProps, defineEmits } from 'vue'
 import RichtextEditor from './RichtextEditor.vue'
 import ImageField from './ImageField.vue'
 import RepeaterField from './RepeaterField.vue'
+import ReferenceField from './ReferenceField.vue'
 import { Input, Textarea, Button } from './ui'
 import type { Field } from '@lumo/core'
 

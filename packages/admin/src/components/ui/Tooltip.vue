@@ -15,11 +15,11 @@
       <div
         v-if="show"
         :class="tooltipClasses"
-        class="absolute z-50 px-2 py-1 text-xs font-medium text-white bg-gray-900 rounded shadow-lg whitespace-nowrap pointer-events-none font-label"
+        class="absolute z-50 px-2 py-1 text-xs font-medium text-white bg-gray-900 dark:bg-gray-700 rounded shadow-lg whitespace-nowrap pointer-events-none font-label"
       >
         {{ text }}
         <!-- Arrow -->
-        <div :class="arrowClasses" class="absolute w-2 h-2 bg-gray-900 transform rotate-45"></div>
+        <div :class="arrowClasses" class="absolute w-2 h-2 bg-gray-900 dark:bg-gray-700 transform rotate-45"></div>
       </div>
     </Transition>
   </div>

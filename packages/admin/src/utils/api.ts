@@ -65,10 +65,13 @@ class ApiClient {
     return this.request<{ needsSetup: boolean }>('/auth/status')
   }
 
-  async setup(email: string, password: string) {
-    return this.request<{ user: { id: string; email: string; role: string } }>('/auth/setup', {
+  async setup(projectName: string, email: string, password: string) {
+    return this.request<{
+      user: { id: string; email: string; role: string }
+      project: { id: string; key: string; name: string }
+    }>('/auth/setup', {
       method: 'POST',
-      body: JSON.stringify({ email, password }),
+      body: JSON.stringify({ projectName, email, password }),
     })
   }
 
@@ -85,6 +88,13 @@ class ApiClient {
 
   async logout() {
     return this.request('/logout', { method: 'POST' })
+  }
+
+  async changePassword(currentPassword: string, newPassword: string) {
+    return this.request('/me/password', {
+      method: 'PUT',
+      body: JSON.stringify({ currentPassword, newPassword }),
+    })
   }
 
   // Pages

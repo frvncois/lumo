@@ -1,5 +1,5 @@
 <template>
-  <aside class="bg-white flex flex-col items-center p-3 gap-2 self-start rounded-2xl m-10">
+  <aside class="bg-white dark:bg-gray-900 dark:border dark:border-gray-800 flex flex-col items-center p-3 gap-2 self-start rounded-2xl m-10">
     <!-- Navigation Icons -->
     <Tooltip text="Content" position="right">
       <Button
@@ -47,17 +47,27 @@
     </Tooltip>
 
     <!-- User -->
-      <Tooltip :text="`${userEmail || 'User'}`" position="right">
-        <Button
-          @click="handleLogout"
-          variant="outline"
-          class="!w-10 !h-10 !p-0"
-        >
-          <span class="text-sm font-medium">
-            {{ userInitial }}
-          </span>
-        </Button>
-      </Tooltip>
+    <UserPopover
+      :user="{ email: userEmail, role: userRole }"
+      @account-settings="showAccountSettings = true"
+      @logout="handleLogout"
+    >
+      <Button
+        variant="outline"
+        class="!w-10 !h-10 !p-0"
+      >
+        <span class="text-sm font-medium">
+          {{ userInitial }}
+        </span>
+      </Button>
+    </UserPopover>
+
+    <!-- Account Settings Modal -->
+    <AccountSettingsModal
+      v-if="showAccountSettings"
+      :user="{ email: userEmail, role: userRole }"
+      @close="showAccountSettings = false"
+    />
   </aside>
 </template>
 
@@ -66,12 +76,15 @@ import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { api } from '../utils/api'
 import { Tooltip, Button } from './ui'
+import UserPopover from './UserPopover.vue'
+import AccountSettingsModal from './AccountSettingsModal.vue'
 
 const route = useRoute()
 const router = useRouter()
 
 const userEmail = ref('')
 const userRole = ref('')
+const showAccountSettings = ref(false)
 
 const userInitial = computed(() => {
   return userEmail.value.charAt(0).toUpperCase() || 'U'

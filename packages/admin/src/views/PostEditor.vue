@@ -1,13 +1,5 @@
 <template>
   <div>
-    <div v-if="error" class="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 mb-6">
-      {{ error }}
-    </div>
-
-    <div v-if="saveSuccess" class="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 mb-6">
-      Post saved successfully!
-    </div>
-
     <div v-if="isLoading" class="text-gray-600">Loading post...</div>
 
     <div v-else-if="post && postTypeSchema" class="space-y-6">
@@ -21,6 +13,30 @@
             variant="ghost"
             size="lg"
           />
+        </CardContent>
+      </Card>
+
+      <!-- No Fields Schema Setup Card -->
+      <Card v-if="!postTypeSchema.fields || postTypeSchema.fields.length === 0">
+        <CardContent>
+          <div class="text-center py-8">
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Set up your post type schema</h3>
+            <p class="text-gray-600 mb-4">
+              Add fields to this post type schema to start creating content.
+            </p>
+            <Button
+              @click="goToSchemaEditor"
+              variant="default"
+              size="sm"
+            >
+              Go to Schema Editor
+            </Button>
+          </div>
         </CardContent>
       </Card>
 
@@ -40,6 +56,13 @@
           />
         </CardContent>
       </Card>
+
+      <!-- SEO Card -->
+      <SEOCard
+        v-model="translationSeo"
+        :fallback-title="translationTitle"
+        :fallback-slug="translationSlug"
+      />
     </div>
 
     <!-- Teleport Header Actions -->
@@ -199,13 +222,18 @@ import { useRoute, useRouter } from 'vue-router'
 import { api } from '../utils/api'
 import { useConfig } from '../composables/useConfig'
 import { usePreview } from '../composables/usePreview'
+import { useDialog } from '../composables/useDialog'
+import { useToast } from '../composables/useToast'
 import FieldRenderer from '../components/FieldRenderer.vue'
+import SEOCard from '../components/SEOCard.vue'
 import { Card, CardHeader, CardContent, Button, Input } from '../components/ui'
 
 const route = useRoute()
 const router = useRouter()
 const { config, getPostTypeSchema, refresh: refreshConfig } = useConfig()
 const { isCreatingPreview, createPreview } = usePreview()
+const dialog = useDialog()
+const toast = useToast()
 
 const postId = computed(() => route.params.id as string)
 const postType = computed(() => route.params.type as string)
@@ -213,20 +241,17 @@ const postTypeSchema = computed(() => getPostTypeSchema(postType.value))
 
 const post = ref<any>({ status: 'draft', position: null, translations: {} })
 const currentLanguage = ref('')
-const publishedDate = ref('')
 const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
 const isDeletingTranslation = ref(false)
-const error = ref('')
-const saveSuccess = ref(false)
 const mounted = ref(false)
-const isUpdatingDate = ref(false)
 
 // Translation fields
 const translationTitle = ref('')
 const translationSlug = ref('')
 const translationFields = ref<Record<string, any>>({})
+const translationSeo = ref<any>({})
 
 const currentTranslation = computed(() => {
   if (!post.value || !currentLanguage.value) return null
@@ -237,31 +262,23 @@ const showPositionField = computed(() => {
   return postTypeSchema.value?.order === 'auto' || postTypeSchema.value?.order === 'position_asc'
 })
 
-watch(
-  () => post.value?.publishedAt,
-  (value) => {
-    if (isUpdatingDate.value) return
-    isUpdatingDate.value = true
-    if (value) {
+// Computed property for publishedDate with getter/setter to avoid watch loops
+const publishedDate = computed({
+  get() {
+    if (post.value?.publishedAt) {
       // Convert ISO string to datetime-local format
-      const date = new Date(value)
-      publishedDate.value = date.toISOString().slice(0, 16)
+      const date = new Date(post.value.publishedAt)
+      return date.toISOString().slice(0, 16)
     } else {
-      // Set to current time if not set
+      // Return current time if not set
       const now = new Date()
-      publishedDate.value = now.toISOString().slice(0, 16)
+      return now.toISOString().slice(0, 16)
     }
-    isUpdatingDate.value = false
   },
-  { immediate: true }
-)
-
-watch(publishedDate, (value) => {
-  if (isUpdatingDate.value) return
-  if (post.value && value) {
-    isUpdatingDate.value = true
-    post.value.publishedAt = new Date(value).toISOString()
-    isUpdatingDate.value = false
+  set(value: string) {
+    if (post.value && value) {
+      post.value.publishedAt = new Date(value).toISOString()
+    }
   }
 })
 
@@ -285,6 +302,7 @@ function loadTranslationData() {
     translationTitle.value = translation.title || ''
     translationSlug.value = translation.slug || ''
     translationFields.value = translation.fields || {}
+    translationSeo.value = translation.seo || {}
   } else {
     // For new translations, set defaults
     translationTitle.value = 'Untitled'
@@ -300,18 +318,21 @@ function loadTranslationData() {
           fieldDefaults[field.key] = false
         } else if (field.type === 'repeater') {
           fieldDefaults[field.key] = []
+        } else if (field.type === 'reference') {
+          // Single reference defaults to null, multiple defaults to []
+          fieldDefaults[field.key] = field.reference?.multiple ? [] : null
         }
         // Don't initialize text/other fields - leave them undefined
         // FieldRenderer will handle undefined values, and updateField will add them as user types
       }
     }
     translationFields.value = fieldDefaults
+    translationSeo.value = {}
   }
 }
 
 async function loadPost() {
   isLoading.value = true
-  error.value = ''
 
   try {
     post.value = await api.getPost(postId.value)
@@ -325,8 +346,7 @@ async function loadPost() {
     post.value.id = postId.value
     post.value.type = postType.value
     post.value.publishedAt = new Date().toISOString()
-    error.value = ''
-  } finally {
+    } finally {
     isLoading.value = false
   }
 }
@@ -342,17 +362,15 @@ async function handleSave() {
 
   // Validate required fields before saving
   if (!translationTitle.value || !translationTitle.value.trim()) {
-    error.value = 'Title is required'
+    toast.error('Title is required')
     return
   }
   if (!translationSlug.value || !translationSlug.value.trim()) {
-    error.value = 'Slug is required'
+    toast.error('Slug is required')
     return
   }
 
   isSaving.value = true
-  error.value = ''
-  saveSuccess.value = false
 
   try {
     // Save metadata first
@@ -367,6 +385,7 @@ async function handleSave() {
       title: translationTitle.value.trim(),
       slug: translationSlug.value.trim(),
       fields: translationFields.value,
+      seo: translationSeo.value,
     }
 
     console.log('Saving translation:', {
@@ -390,10 +409,7 @@ async function handleSave() {
     await loadPost()
     loadTranslationData()
 
-    saveSuccess.value = true
-    setTimeout(() => {
-      saveSuccess.value = false
-    }, 3000)
+    toast.success('Post saved successfully!')
   } catch (err: any) {
     console.error('Save failed:', err)
     console.error('Error details:', err.details)
@@ -401,25 +417,32 @@ async function handleSave() {
     if (err.details) {
       console.error('Validation errors:', JSON.stringify(err.details, null, 2))
     }
-    error.value = err instanceof Error ? err.message : 'Failed to save post'
+    toast.error(err instanceof Error ? err.message : 'Failed to save post')
   } finally {
     isSaving.value = false
   }
 }
 
 async function handleDelete() {
-  if (!confirm('Are you sure you want to delete this post? This cannot be undone.')) {
-    return
-  }
+  const confirmed = await dialog.confirm(
+    'Are you sure you want to delete this post? This cannot be undone.',
+    {
+      title: 'Delete Post',
+      confirmText: 'Delete',
+      variant: 'danger'
+    }
+  )
+
+  if (!confirmed) return
 
   isDeleting.value = true
-  error.value = ''
 
   try {
     await api.deletePost(postId.value)
+    toast.success('Post deleted successfully!')
     router.push(`/admin/posts/${postType.value}`)
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to delete post'
+    toast.error(err instanceof Error ? err.message : 'Failed to delete post')
   } finally {
     isDeleting.value = false
   }
@@ -439,19 +462,25 @@ async function handlePreview() {
       fields: translationFields.value,
     })
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to create preview'
+    toast.error(err instanceof Error ? err.message : 'Failed to create preview')
   }
 }
 
 async function handleDeleteTranslation() {
   if (!post.value || currentLanguage.value === config.value?.defaultLanguage) return
 
-  if (!confirm(`Are you sure you want to delete the ${currentLanguage.value.toUpperCase()} translation? This cannot be undone.`)) {
-    return
-  }
+  const confirmed = await dialog.confirm(
+    `Are you sure you want to delete the ${currentLanguage.value.toUpperCase()} translation? This cannot be undone.`,
+    {
+      title: 'Delete Translation',
+      confirmText: 'Delete',
+      variant: 'danger'
+    }
+  )
+
+  if (!confirmed) return
 
   isDeletingTranslation.value = true
-  error.value = ''
 
   try {
     await api.deletePostTranslation(postId.value, currentLanguage.value)
@@ -459,10 +488,15 @@ async function handleDeleteTranslation() {
     currentLanguage.value = config.value?.defaultLanguage || 'en'
     // Reload post to get updated translations
     await loadPost()
+    toast.success('Translation deleted successfully!')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to delete translation'
+    toast.error(err instanceof Error ? err.message : 'Failed to delete translation')
   } finally {
     isDeletingTranslation.value = false
   }
+}
+
+function goToSchemaEditor() {
+  router.push({ path: '/admin/settings', query: { tab: 'schema' } })
 }
 </script>

@@ -1,52 +1,36 @@
 <template>
-  <router-link
-    v-if="to"
-    :to="to"
-    class="flex items-center justify-between px-4 py-3 transition-colors"
+  <component
+    :is="to || editUrl ? 'router-link' : 'div'"
+    :to="to || editUrl"
+    :class="[
+      'flex items-center justify-between px-4 py-3 transition-colors',
+      to || editUrl ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50' : ''
+    ]"
   >
     <div class="flex-1">
-      <h3 v-if="title" class="font-medium text-gray-900">{{ title }}</h3>
-      <p v-if="subtitle" class="text-sm text-gray-500 mt-0.5">{{ subtitle }}</p>
+      <h3 class="font-medium text-gray-900 dark:text-white">{{ name || title }}</h3>
+      <p class="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{{ slug || subtitle }}</p>
       <slot />
     </div>
     <div class="flex items-center gap-2">
       <slot name="actions" />
-      <svg
-        v-if="showArrow"
-        class="h-5 w-5 text-gray-400"
-        xmlns="http://www.w3.org/2000/svg"
-        viewBox="0 0 20 20"
-        fill="currentColor"
-      >
-        <path
-          fill-rule="evenodd"
-          d="M7.293 14.707a1 1 0 010-1.414L10.586 10 7.293 6.707a1 1 0 011.414-1.414l4 4a1 1 0 010 1.414l-4 4a1 1 0 01-1.414 0z"
-          clip-rule="evenodd"
-        />
-      </svg>
+      <IconNext v-if="showArrow" />
     </div>
-  </router-link>
-  <div
-    v-else
-    class="flex items-center justify-between px-4 py-3 cursor-pointer transition-colors"
-    @click="$emit('click', $event)"
-  >
-    <div class="flex-1">
-      <h3 v-if="title" class="font-medium text-gray-900">{{ title }}</h3>
-      <p v-if="subtitle" class="text-sm text-gray-500 mt-0.5">{{ subtitle }}</p>
-      <slot />
-    </div>
-    <div class="flex items-center gap-2">
-      <slot name="actions" />
-    </div>
-  </div>
+  </component>
 </template>
 
 <script setup lang="ts">
+import IconNext from '../icons/IconNext.vue'
+
 withDefaults(defineProps<{
   to?: string
+  editUrl?: string
   title?: string
+  name?: string
   subtitle?: string
+  slug?: string
+  updatedAt?: string
+  status?: 'published' | 'draft'
   showArrow?: boolean
 }>(), {
   showArrow: true

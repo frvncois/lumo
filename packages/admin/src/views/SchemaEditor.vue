@@ -83,9 +83,11 @@ import SchemaCard from '../components/SchemaCard.vue'
 import SchemaModal from '../components/SchemaModal.vue'
 import { api } from '../utils/api'
 import { useConfig } from '../composables/useConfig'
+import { useDialog } from '../composables/useDialog'
 import type { Field, PageSchema, PostTypeSchema } from '@lumo/core'
 
 const { refresh: refreshConfig } = useConfig()
+const dialog = useDialog()
 
 const pageSchemas = ref<PageSchema[]>([])
 const postTypeSchemas = ref<PostTypeSchema[]>([])
@@ -137,9 +139,16 @@ async function deletePageSchemaConfirm(slug: string) {
   const schema = pageSchemas.value.find((s) => s.slug === slug)
   if (!schema) return
 
-  if (!confirm(`Are you sure you want to delete the page schema "${slug}"? This cannot be undone.`)) {
-    return
-  }
+  const confirmed = await dialog.confirm(
+    `Are you sure you want to delete the page schema "${slug}"? This cannot be undone.`,
+    {
+      title: 'Delete Page Schema',
+      confirmText: 'Delete',
+      variant: 'danger'
+    }
+  )
+
+  if (!confirmed) return
 
   try {
     await api.deletePageSchema(slug)
@@ -171,9 +180,16 @@ async function deletePostTypeSchemaConfirm(slug: string) {
   const schema = postTypeSchemas.value.find((s) => s.slug === slug)
   if (!schema) return
 
-  if (!confirm(`Are you sure you want to delete the post type "${schema.name}"? This cannot be undone.`)) {
-    return
-  }
+  const confirmed = await dialog.confirm(
+    `Are you sure you want to delete the post type "${schema.name}"? This cannot be undone.`,
+    {
+      title: 'Delete Post Type',
+      confirmText: 'Delete',
+      variant: 'danger'
+    }
+  )
+
+  if (!confirmed) return
 
   try {
     await api.deletePostTypeSchema(slug)

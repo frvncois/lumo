@@ -42,8 +42,9 @@ const translationContent = {
 export const authSetupSchema: FastifySchema = {
   body: {
     type: 'object',
-    required: ['email', 'password'],
+    required: ['projectName', 'email', 'password'],
     properties: {
+      projectName: { type: 'string', minLength: 1, maxLength: 100 },
       email: { type: 'string', format: 'email' },
       password: { type: 'string', minLength: 8 },
     },

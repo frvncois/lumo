@@ -19,18 +19,7 @@
           </ul>
         </div>
 
-        <!-- Slug (only for new) -->
-        <div v-if="isNew" class="mb-4">
-          <label class="block text-sm font-medium mb-1">Slug *</label>
-          <input
-            v-model="form.slug"
-            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-            placeholder="e.g. home, blog"
-          />
-          <p class="text-xs text-gray-500 mt-1">Lowercase, no spaces, use hyphens</p>
-        </div>
-
-        <!-- Name field for pages and globals -->
+        <!-- Name field for pages and globals (FIRST) -->
         <div v-if="type === 'page' || type === 'global'" class="mb-4">
           <label class="block text-sm font-medium mb-1">Name *</label>
           <input
@@ -40,23 +29,48 @@
           />
         </div>
 
-        <!-- Name fields for post types -->
-        <div v-if="type === 'postType'" class="grid grid-cols-2 gap-4 mb-4">
-          <div>
-            <label class="block text-sm font-medium mb-1">Name (Plural) *</label>
-            <input
-              v-model="form.name"
-              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
-              placeholder="e.g. Blog Posts"
-            />
-          </div>
-          <div>
+        <!-- Slug for pages/globals (SECOND, auto-suggested) -->
+        <div v-if="(type === 'page' || type === 'global') && isNew" class="mb-4">
+          <label class="block text-sm font-medium mb-1">Slug *</label>
+          <input
+            v-model="form.slug"
+            class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+            placeholder="Auto-generated from name"
+          />
+          <p class="text-xs text-gray-500 mt-1">Lowercase, no spaces, use hyphens</p>
+        </div>
+
+        <!-- Name fields for post types (REORDERED) -->
+        <div v-if="type === 'postType'">
+          <!-- Name Singular (FIRST) -->
+          <div class="mb-4">
             <label class="block text-sm font-medium mb-1">Name (Singular) *</label>
             <input
               v-model="form.nameSingular"
               class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
               placeholder="e.g. Blog Post"
             />
+          </div>
+
+          <!-- Name Plural (SECOND, auto-suggested) -->
+          <div class="mb-4">
+            <label class="block text-sm font-medium mb-1">Name (Plural) *</label>
+            <input
+              v-model="form.name"
+              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Auto-generated from singular"
+            />
+          </div>
+
+          <!-- Slug (THIRD, auto-suggested) -->
+          <div v-if="isNew" class="mb-4">
+            <label class="block text-sm font-medium mb-1">Slug *</label>
+            <input
+              v-model="form.slug"
+              class="w-full px-3 py-2 border border-gray-300 rounded focus:outline-none focus:ring-2 focus:ring-blue-500"
+              placeholder="Auto-generated from name"
+            />
+            <p class="text-xs text-gray-500 mt-1">Lowercase, no spaces, use hyphens</p>
           </div>
         </div>
 
@@ -122,7 +136,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, reactive, watch } from 'vue'
+import { ref, reactive, watch, provide, onMounted } from 'vue'
 import draggable from 'vuedraggable'
 import FieldRow from './FieldRow.vue'
 import { api } from '../utils/api'
@@ -143,6 +157,24 @@ const isSaving = ref(false)
 const error = ref('')
 const validationErrors = ref<any[]>([])
 
+// Fetch and provide post types for reference field
+const postTypes = ref<{ slug: string; name: string }[]>([])
+
+onMounted(async () => {
+  try {
+    const config = await api.getConfig()
+    postTypes.value = Object.values(config.postTypes || {}).map((pt: any) => ({
+      slug: pt.slug,
+      name: pt.name
+    }))
+  } catch (err) {
+    console.error('Failed to load post types:', err)
+  }
+})
+
+// Provide to child components (FieldRow)
+provide('postTypes', postTypes)
+
 const form = reactive<{
   slug: string
   name: string
@@ -160,6 +192,29 @@ function getTypeLabel(): string {
   if (props.type === 'postType') return 'Post Type'
   if (props.type === 'global') return 'Global Schema'
   return ''
+}
+
+// Helper function to generate slug from text
+function toSlug(text: string): string {
+  return text
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s-]/g, '')
+    .replace(/\s+/g, '-')
+    .replace(/-+/g, '-')
+}
+
+// Helper to pluralize (simple version)
+function simplePluralize(word: string): string {
+  if (!word) return ''
+  const lower = word.toLowerCase()
+  if (lower.endsWith('y') && !['a','e','i','o','u'].includes(lower[lower.length - 2])) {
+    return word.slice(0, -1) + 'ies'
+  }
+  if (lower.endsWith('s') || lower.endsWith('x') || lower.endsWith('ch') || lower.endsWith('sh')) {
+    return word + 'es'
+  }
+  return word + 's'
 }
 
 // Initialize form with existing schema data
@@ -181,9 +236,24 @@ watch(
   { immediate: true }
 )
 
+// Watch name changes to auto-suggest slug (for pages/globals)
+watch(() => form.name, (newName) => {
+  if (props.isNew && (props.type === 'page' || props.type === 'global')) {
+    form.slug = toSlug(newName)
+  }
+})
+
+// Watch nameSingular to auto-suggest name (plural) and slug (for post types)
+watch(() => form.nameSingular, (newSingular) => {
+  if (props.isNew && props.type === 'postType') {
+    form.name = simplePluralize(newSingular)
+    form.slug = toSlug(newSingular)
+  }
+})
+
 function addField() {
   form.fields.push({
-    key: `field_${form.fields.length + 1}`,
+    key: '',  // Empty - will be auto-suggested from label
     type: 'text',
     label: '',
     required: false,

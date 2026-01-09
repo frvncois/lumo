@@ -3,15 +3,16 @@
     <!-- Drag Handle -->
     <span class="drag-handle cursor-move text-gray-400 hover:text-gray-600">⠿</span>
 
-    <!-- Key -->
+    <!-- Label (FIRST) -->
     <input
-      v-model="localField.key"
+      v-model="localField.label"
+      @input="onLabelInput"
       @blur="emitUpdate"
-      class="input w-32 text-sm font-mono"
-      placeholder="key"
+      class="input flex-1 text-sm"
+      placeholder="Label"
     />
 
-    <!-- Type -->
+    <!-- Type (SECOND) -->
     <select
       v-model="localField.type"
       @change="onTypeChange"
@@ -28,17 +29,18 @@
       <option value="time">time</option>
       <option value="select">select</option>
       <option value="repeater">repeater</option>
+      <option value="reference">reference</option>
     </select>
 
-    <!-- Label -->
+    <!-- Key (THIRD, auto-suggested) -->
     <input
-      v-model="localField.label"
+      v-model="localField.key"
       @blur="emitUpdate"
-      class="input flex-1 text-sm"
-      placeholder="Label"
+      class="input w-32 text-sm font-mono"
+      placeholder="auto_key"
     />
 
-    <!-- Required -->
+    <!-- Required (FOURTH) -->
     <label class="flex items-center gap-1 text-sm">
       <input
         type="checkbox"
@@ -101,6 +103,34 @@
     </div>
   </div>
 
+  <!-- Reference Configuration -->
+  <div v-if="localField.type === 'reference'" class="ml-8 mt-2 space-y-2 border-l-2 border-purple-200 pl-4">
+    <div class="flex items-center gap-4">
+      <div class="flex-1">
+        <label class="text-xs font-medium text-gray-600 block mb-1">Post Type</label>
+        <select
+          v-model="localField.reference.postType"
+          @change="emitUpdate"
+          class="input w-full text-sm"
+        >
+          <option value="" disabled>Select post type...</option>
+          <option v-for="pt in postTypes" :key="pt.slug" :value="pt.slug">
+            {{ pt.name }}
+          </option>
+        </select>
+      </div>
+      <div>
+        <label class="text-xs font-medium text-gray-600 block mb-1">Multiple</label>
+        <input
+          type="checkbox"
+          v-model="localField.reference.multiple"
+          @change="emitUpdate"
+          class="mt-1"
+        />
+      </div>
+    </div>
+  </div>
+
   <!-- Sub-fields for Repeater -->
   <div v-if="localField.type === 'repeater'" class="ml-8 mt-2 space-y-2 border-l-2 border-blue-200 pl-4">
     <div class="flex justify-between items-center">
@@ -130,10 +160,18 @@
 </template>
 
 <script setup lang="ts">
-import { reactive, watch } from 'vue'
+import { reactive, watch, ref, inject } from 'vue'
 
 const props = defineProps<{
-  field: { key: string; type: string; label: string; required: boolean; fields?: any[]; options?: any[] }
+  field: {
+    key: string
+    type: string
+    label: string
+    required: boolean
+    fields?: any[]
+    options?: any[]
+    reference?: { postType: string; multiple?: boolean }
+  }
 }>()
 
 const emit = defineEmits<{
@@ -141,11 +179,38 @@ const emit = defineEmits<{
   delete: []
 }>()
 
+// Inject post types from parent (SchemaModal provides this)
+const postTypes = inject<{ slug: string; name: string }[]>('postTypes', [])
+
 const localField = reactive({ ...props.field })
+const previousLabel = ref(props.field.label)
 
 watch(() => props.field, (newVal) => {
   Object.assign(localField, newVal)
+  previousLabel.value = newVal.label
 }, { deep: true })
+
+// Helper function to convert label to field key
+function toFieldKey(label: string): string {
+  return label
+    .toLowerCase()
+    .trim()
+    .replace(/[^a-z0-9\s]/g, '')
+    .replace(/\s+/g, '_')
+}
+
+// Auto-suggest key from label
+function onLabelInput() {
+  // Only auto-suggest if key is empty or was previously auto-generated
+  const autoKey = toFieldKey(localField.label)
+  const previousAutoKey = toFieldKey(previousLabel.value)
+
+  if (!localField.key || localField.key === previousAutoKey) {
+    localField.key = autoKey
+  }
+
+  previousLabel.value = localField.label
+}
 
 function emitUpdate() {
   emit('update', { ...localField })
@@ -170,6 +235,15 @@ function onTypeChange() {
     delete localField.options
   }
 
+  // Initialize reference config when changing to reference type
+  if (localField.type === 'reference' && !localField.reference) {
+    localField.reference = { postType: '', multiple: false }
+  }
+  // Remove reference config when changing away from reference type
+  if (localField.type !== 'reference' && localField.reference) {
+    delete localField.reference
+  }
+
   emitUpdate()
 }
 
@@ -178,7 +252,7 @@ function addSubField() {
     localField.fields = []
   }
   localField.fields.push({
-    key: `subfield_${localField.fields.length + 1}`,
+    key: '',  // Empty - will be auto-suggested from label
     type: 'text',
     label: '',
     required: false,

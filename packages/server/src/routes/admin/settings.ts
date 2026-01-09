@@ -8,6 +8,7 @@ import { requireOwner } from '../../middleware/permissions.js'
 import { getSetting, setSetting, getAllSettings } from '@lumo/db'
 import { errors } from '../../utils/errors.js'
 import { adminUpdateLanguagesSchema } from '../../schemas/index.js'
+import type { GeneralSEO } from '@lumo/core'
 
 export async function registerAdminSettingsRoutes(app: FastifyInstance) {
   /**
@@ -63,5 +64,26 @@ export async function registerAdminSettingsRoutes(app: FastifyInstance) {
       languages,
       defaultLanguage,
     }
+  })
+
+  /**
+   * GET /api/admin/settings/seo
+   * Get general SEO settings
+   */
+  app.get('/api/admin/settings/seo', { preHandler: [requireAuth] }, async () => {
+    const seo = getSetting<GeneralSEO>(app.db, 'generalSeo') || {}
+    return seo
+  })
+
+  /**
+   * PUT /api/admin/settings/seo
+   * Update general SEO settings
+   */
+  app.put<{
+    Body: GeneralSEO
+  }>('/api/admin/settings/seo', { preHandler: [requireAuth, requireOwner] }, async (request) => {
+    const seo = request.body
+    setSetting(app.db, 'generalSeo', seo)
+    return seo
   })
 }

@@ -1,17 +1,32 @@
 <template>
   <div>
-    <!-- Error Messages -->
-    <div v-if="error" class="bg-red-50 border border-red-200 rounded-md p-4 text-red-800 mb-6">
-      {{ error }}
-    </div>
-
-    <div v-if="saveSuccess" class="bg-green-50 border border-green-200 rounded-md p-4 text-green-800 mb-6">
-      Global saved successfully!
-    </div>
-
     <div v-if="isLoading" class="text-gray-600">Loading global...</div>
 
     <div v-else-if="globalData && globalSchema" class="space-y-6">
+      <!-- No Fields Schema Setup Card -->
+      <Card v-if="!globalSchema.fields || globalSchema.fields.length === 0">
+        <CardContent>
+          <div class="text-center py-8">
+            <div class="w-16 h-16 bg-blue-100 rounded-full flex items-center justify-center mx-auto mb-4">
+              <svg class="w-8 h-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6" />
+              </svg>
+            </div>
+            <h3 class="text-lg font-semibold text-gray-900 mb-2">Set up your global schema</h3>
+            <p class="text-gray-600 mb-4">
+              Add fields to this global schema to start creating content.
+            </p>
+            <Button
+              @click="goToSchemaEditor"
+              variant="default"
+              size="sm"
+            >
+              Go to Schema Editor
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       <!-- Form Fields - Each in own Card -->
       <Card v-for="field in globalSchema.fields" :key="field.key">
         <CardHeader>
@@ -116,14 +131,19 @@
 
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
 import { api } from '../utils/api'
 import { useConfig } from '../composables/useConfig'
+import { useDialog } from '../composables/useDialog'
+import { useToast } from '../composables/useToast'
 import FieldRenderer from '../components/FieldRenderer.vue'
 import { Card, CardHeader, CardContent, Button } from '../components/ui'
 
 const route = useRoute()
+const router = useRouter()
 const { config, getGlobalSchema, refresh: refreshConfig } = useConfig()
+const dialog = useDialog()
+const toast = useToast()
 
 const schemaSlug = computed(() => route.params.slug as string)
 const globalSchema = computed(() => getGlobalSchema(schemaSlug.value))
@@ -134,8 +154,6 @@ const mounted = ref(false)
 const isLoading = ref(true)
 const isSaving = ref(false)
 const isDeleting = ref(false)
-const error = ref('')
-const saveSuccess = ref(false)
 
 const translationFields = ref<Record<string, any>>({})
 
@@ -157,14 +175,13 @@ watch(currentLanguage, () => {
 
 async function loadGlobal() {
   isLoading.value = true
-  error.value = ''
 
   try {
     const result = await api.getGlobal(schemaSlug.value)
     globalData.value = result
     loadTranslation()
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to load global'
+    toast.error(err instanceof Error ? err.message : 'Failed to load global')
   } finally {
     isLoading.value = false
   }
@@ -199,6 +216,9 @@ function getDefaultValueForField(field: any): any {
     case 'gallery':
     case 'repeater':
       return []
+    case 'reference':
+      // Single reference defaults to null, multiple defaults to []
+      return field.reference?.multiple ? [] : null
     default:
       return null
   }
@@ -210,37 +230,36 @@ function updateField(key: string, value: any) {
 
 async function handleSave() {
   isSaving.value = true
-  error.value = ''
-  saveSuccess.value = false
 
   try {
     await api.updateGlobalTranslation(schemaSlug.value, currentLanguage.value, {
       fields: translationFields.value,
     })
 
-    saveSuccess.value = true
-
     // Reload to get updated data
     await loadGlobal()
 
-    // Hide success message after 3 seconds
-    setTimeout(() => {
-      saveSuccess.value = false
-    }, 3000)
+    toast.success('Global saved successfully!')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to save global'
+    toast.error(err instanceof Error ? err.message : 'Failed to save global')
   } finally {
     isSaving.value = false
   }
 }
 
 async function handleDeleteTranslation() {
-  if (!confirm(`Are you sure you want to delete the ${currentLanguage.value} translation?`)) {
-    return
-  }
+  const confirmed = await dialog.confirm(
+    `Are you sure you want to delete the ${currentLanguage.value.toUpperCase()} translation? This cannot be undone.`,
+    {
+      title: 'Delete Translation',
+      confirmText: 'Delete',
+      variant: 'danger'
+    }
+  )
+
+  if (!confirmed) return
 
   isDeleting.value = true
-  error.value = ''
 
   try {
     await api.deleteGlobalTranslation(schemaSlug.value, currentLanguage.value)
@@ -250,10 +269,15 @@ async function handleDeleteTranslation() {
 
     // Reload global
     await loadGlobal()
+    toast.success('Translation deleted successfully!')
   } catch (err) {
-    error.value = err instanceof Error ? err.message : 'Failed to delete translation'
+    toast.error(err instanceof Error ? err.message : 'Failed to delete translation')
   } finally {
     isDeleting.value = false
   }
+}
+
+function goToSchemaEditor() {
+  router.push({ path: '/admin/settings', query: { tab: 'schema' } })
 }
 </script>

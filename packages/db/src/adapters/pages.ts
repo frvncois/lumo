@@ -56,6 +56,7 @@ export function getPageById(db: Database.Database, id: string): Page | null {
       slug: row.slug,
       title: content.title,
       fields: content.fields,
+      seo: content.seo,
       updatedAt: row.updated_at,
     }
   }
@@ -144,6 +145,7 @@ export function upsertPageTranslation(
   const contentJson = JSON.stringify({
     title: content.title,
     fields: content.fields,
+    seo: content.seo || {},
   })
 
   if (existing) {
@@ -176,6 +178,7 @@ function insertPageTranslation(
   const contentJson = JSON.stringify({
     title: content.title,
     fields: content.fields,
+    seo: content.seo || {},
   })
 
   db.prepare(`

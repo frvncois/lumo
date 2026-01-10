@@ -21,12 +21,14 @@ export function createUser(
   email: string,
   passwordHash?: string
 ): User {
+  // Normalize email for storage
+  const normalizedEmail = email.toLowerCase().trim()
   const now = new Date().toISOString()
 
   db.prepare(`
     INSERT INTO users (id, email, password_hash, created_at)
     VALUES (?, ?, ?, ?)
-  `).run(id, email, passwordHash ?? null, now)
+  `).run(id, normalizedEmail, passwordHash ?? null, now)
 
   return getUserById(db, id)!
 }
@@ -50,9 +52,12 @@ export function getUserById(db: Database.Database, id: string): User | null {
  * Get user by email
  */
 export function getUserByEmail(db: Database.Database, email: string): User | null {
+  // Normalize email for lookup
+  const normalizedEmail = email.toLowerCase().trim()
+
   const row = db
     .prepare<[string], UserRow>('SELECT * FROM users WHERE email = ?')
-    .get(email)
+    .get(normalizedEmail)
 
   if (!row) {
     return null

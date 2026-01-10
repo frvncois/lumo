@@ -1,5 +1,10 @@
 /**
- * Error Response Utilities
+ * Standardized Error Responses
+ *
+ * All API responses MUST follow these formats:
+ *
+ * Success: { success: true, data?: T }
+ * Error: { error: { code: string, message: string, details?: ValidationErrorDetail[] } }
  */
 
 import type { FastifyReply } from 'fastify'
@@ -8,10 +13,24 @@ import type { ValidationErrorDetail } from '@lumo/core'
 
 export type ApiErrorCode = typeof ErrorCodes[keyof typeof ErrorCodes]
 
-export interface ApiError {
-  code: ApiErrorCode
-  message: string
-  details?: ValidationErrorDetail[]
+interface ApiError {
+  error: {
+    code: string
+    message: string
+    details?: ValidationErrorDetail[]
+  }
+}
+
+interface ApiSuccess<T = undefined> {
+  success: true
+  data?: T
+}
+
+/**
+ * Send a standardized success response
+ */
+export function success<T>(reply: FastifyReply, data?: T): ApiSuccess<T> {
+  return data !== undefined ? { success: true, data } : { success: true } as ApiSuccess<T>
 }
 
 /**
@@ -23,12 +42,15 @@ export function sendError(
   code: ApiErrorCode,
   message: string,
   details?: ValidationErrorDetail[]
-): void {
-  const error: ApiError = { code, message }
-  if (details && details.length > 0) {
-    error.details = details
+): ApiError {
+  reply.code(statusCode)
+  return {
+    error: {
+      code,
+      message,
+      ...(details && { details }),
+    },
   }
-  reply.code(statusCode).send({ error })
 }
 
 /**

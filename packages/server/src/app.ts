@@ -57,16 +57,32 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   })
 
   // Register plugins
+  // Validate COOKIE_SECRET
   const cookieSecret = process.env.COOKIE_SECRET
-  if (!cookieSecret || cookieSecret === 'replace-me-in-production') {
-    if (process.env.NODE_ENV === 'production') {
-      throw new Error('COOKIE_SECRET environment variable must be set in production')
+  const nodeEnv = process.env.NODE_ENV
+
+  if (nodeEnv === 'development') {
+    if (!cookieSecret) {
+      console.warn('⚠️  WARNING: COOKIE_SECRET not set. Using insecure default for development only.')
     }
-    console.warn('⚠️  WARNING: Using default COOKIE_SECRET. Set COOKIE_SECRET env var for production.')
+  } else {
+    // Production or any other environment
+    if (!cookieSecret) {
+      throw new Error(
+        'COOKIE_SECRET environment variable is required. ' +
+        'Set NODE_ENV=development for local development with insecure defaults.'
+      )
+    }
+    if (cookieSecret.length < 32) {
+      throw new Error('COOKIE_SECRET must be at least 32 characters long.')
+    }
+    if (cookieSecret === 'replace-me-in-production' || cookieSecret === 'dev-secret-do-not-use-in-production') {
+      throw new Error('COOKIE_SECRET is set to a known insecure value. Use a proper secret.')
+    }
   }
 
   await app.register(cookie, {
-    secret: cookieSecret || 'dev-secret-do-not-use-in-production',
+    secret: cookieSecret || (nodeEnv === 'development' ? 'dev-secret-do-not-use-in-production' : ''),
   })
 
   await app.register(multipart, {

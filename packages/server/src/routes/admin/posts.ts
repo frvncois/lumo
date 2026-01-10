@@ -216,7 +216,7 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
 
     deletePostTranslation(app.db, id, lang)
 
-    return { ok: true }
+    return { success: true }
   })
 
   /**
@@ -233,6 +233,6 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
 
     deletePost(app.db, request.params.id)
 
-    return { ok: true }
+    return { success: true }
   })
 }

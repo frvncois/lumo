@@ -163,6 +163,6 @@ export async function registerAdminGlobalRoutes(app: FastifyInstance): Promise<v
 
     deleteGlobalTranslation(app.db, global.id, lang)
 
-    return { ok: true }
+    return { success: true }
   })
 }

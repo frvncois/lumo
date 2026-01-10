@@ -51,6 +51,8 @@ export type {
   Collaborator,
   PreviewTargetType,
   Preview,
+  GeneralSEO,
+  SEOFields,
   ValidationErrorDetail,
   ValidationResult,
 } from './types.js'

@@ -10,6 +10,9 @@ import { createConfigLoader, type ConfigLoader } from './config/loader.js'
 import { ServerDefaults } from './constants.js'
 import type Database from 'better-sqlite3'
 
+// Export password utilities for CLI and other packages
+export { hashPassword, verifyPassword, validatePassword } from './utils/password.js'
+
 // Track resources for cleanup
 let cleanupInterval: NodeJS.Timeout | null = null
 let configLoader: ConfigLoader | null = null

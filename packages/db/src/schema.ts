@@ -63,6 +63,8 @@ export function initializeSchema(db: Database.Database): void {
     );
 
     CREATE INDEX IF NOT EXISTS idx_global_translation_lang ON global_translations(lang);
+    -- Composite index for global translation lookups by global_id and lang
+    CREATE INDEX IF NOT EXISTS idx_global_translations_global_lang ON global_translations(global_id, lang);
 
     -- Pages
     CREATE TABLE IF NOT EXISTS pages (

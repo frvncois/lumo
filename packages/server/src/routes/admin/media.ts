@@ -7,7 +7,7 @@
  * DELETE /api/admin/media/:id - Delete media (owner only)
  */
 
-import type { FastifyInstance } from 'fastify'
+import type { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify'
 import { requireAuth } from '../../middleware/auth.js'
 import { requireOwner } from '../../middleware/permissions.js'
 import {
@@ -51,10 +51,49 @@ export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<vo
   })
 
   /**
+   * Validate Content-Length header before processing upload.
+   * This prevents buffering oversized files.
+   */
+  async function validateContentLength(
+    request: FastifyRequest,
+    reply: FastifyReply,
+    maxSize: number
+  ): Promise<void> {
+    const contentLength = request.headers['content-length']
+
+    if (contentLength) {
+      const size = parseInt(contentLength, 10)
+      if (!isNaN(size) && size > maxSize) {
+        reply.code(413).send({
+          error: {
+            code: 'PAYLOAD_TOO_LARGE',
+            message: `File size exceeds maximum allowed (${formatBytes(maxSize)})`,
+          },
+        })
+        return
+      }
+    }
+  }
+
+  /**
    * POST /api/admin/media
    * Upload new media (multipart)
    */
-  app.post('/api/admin/media', { preHandler: requireAuth }, async (request, reply) => {
+  app.post('/api/admin/media', {
+    preHandler: [
+      requireAuth,
+      async (request, reply) => {
+        // Get max size from config (use the largest allowed)
+        const maxSize = Math.max(
+          request.server.config.media.maxImageSize,
+          request.server.config.media.maxVideoSize,
+          request.server.config.media.maxAudioSize,
+          request.server.config.media.maxDocumentSize
+        )
+        await validateContentLength(request, reply, maxSize)
+      }
+    ]
+  }, async (request, reply) => {
     // Get uploaded file
     const data = await request.file()
     if (!data) {
@@ -184,7 +223,7 @@ export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<vo
       // Delete file first, then database record
       await deleteFile(filename)
       deleteMedia(app.db, id)
-      return { ok: true }
+      return { success: true }
     } catch (error) {
       app.log.error(error, `Failed to delete media file: ${filename}`)
       return errors.internal(reply, 'Failed to delete media file')

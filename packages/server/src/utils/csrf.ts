@@ -4,14 +4,36 @@
  * Uses double-submit cookie pattern for stateless CSRF protection.
  */
 
-import { createHmac, randomBytes } from 'node:crypto'
+import { createHmac, randomBytes, timingSafeEqual } from 'node:crypto'
 import type { FastifyRequest, FastifyReply } from 'fastify'
 
 const CSRF_COOKIE_NAME = 'csrf'
 const CSRF_HEADER_NAME = 'x-csrf-token'
 
+/**
+ * Get the secret for CSRF token signing.
+ * Uses the same security rules as the main token signing secret.
+ */
 function getSecret(): string {
-  return process.env.COOKIE_SECRET || 'dev-secret-do-not-use-in-production'
+  const secret = process.env.COOKIE_SECRET
+  const nodeEnv = process.env.NODE_ENV
+
+  // Explicit development mode: allow insecure default
+  if (nodeEnv === 'development') {
+    if (!secret) {
+      // Warning already logged by tokens.ts, no need to duplicate
+      return 'dev-secret-do-not-use-in-production'
+    }
+    return secret
+  }
+
+  // All other environments: secret is required
+  // tokens.ts will throw if missing, but we check here too for safety
+  if (!secret || secret.length < 32) {
+    throw new Error('COOKIE_SECRET environment variable is required and must be at least 32 characters')
+  }
+
+  return secret
 }
 
 /**
@@ -33,7 +55,18 @@ export function verifyCsrfToken(token: string): boolean {
   const [data, signature] = parts
   const expectedSignature = createHmac('sha256', getSecret()).update(data).digest('base64url')
 
-  return signature === expectedSignature
+  // Convert to buffers for timing-safe comparison
+  // Use 'utf8' encoding since base64url produces UTF-8 safe characters
+  const signatureBuffer = Buffer.from(signature, 'utf8')
+  const expectedBuffer = Buffer.from(expectedSignature, 'utf8')
+
+  // Length check (constant time)
+  if (signatureBuffer.length !== expectedBuffer.length) {
+    return false
+  }
+
+  // Timing-safe comparison
+  return timingSafeEqual(signatureBuffer, expectedBuffer)
 }
 
 /**
@@ -71,7 +104,13 @@ export async function csrfProtection(
     return
   }
 
-  if (cookieToken !== headerToken || !verifyCsrfToken(cookieToken)) {
+  // Use timing-safe comparison for cookie vs header token
+  const cookieBuffer = Buffer.from(cookieToken, 'utf8')
+  const headerBuffer = Buffer.from(headerToken, 'utf8')
+  const tokensMatch = cookieBuffer.length === headerBuffer.length &&
+                      timingSafeEqual(cookieBuffer, headerBuffer)
+
+  if (!tokensMatch || !verifyCsrfToken(cookieToken)) {
     reply.code(403).send({
       error: {
         code: 'CSRF_INVALID',

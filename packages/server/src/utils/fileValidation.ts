@@ -46,8 +46,11 @@ export interface FileValidationResult {
 }
 
 // Allowlist of MIME types
+// NOTE: SVG is intentionally excluded due to XSS risks.
+// SVG files can contain JavaScript that executes in the browser.
+// To add SVG support, implement proper sanitization with DOMPurify or similar.
 const ALLOWED_MIME_TYPES = {
-  image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'],
+  image: ['image/jpeg', 'image/png', 'image/gif', 'image/webp'],
   video: ['video/mp4', 'video/webm', 'video/ogg'],
   audio: ['audio/mpeg', 'audio/ogg', 'audio/wav', 'audio/webm'],
   document: ['application/pdf', 'text/plain'],

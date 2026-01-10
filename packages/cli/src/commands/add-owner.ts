@@ -2,11 +2,8 @@ import path from 'node:path'
 import fs from 'node:fs'
 import chalk from 'chalk'
 import prompts from 'prompts'
-import bcrypt from 'bcrypt'
 import { randomBytes } from 'node:crypto'
-
-const SALT_ROUNDS = 12
-const MIN_PASSWORD_LENGTH = 8
+import { hashPassword, validatePassword } from '@lumo/server'
 
 function generateId(prefix: string = ''): string {
   const random = randomBytes(16).toString('hex')
@@ -16,20 +13,6 @@ function generateId(prefix: string = ''): string {
 function validateEmail(email: string): boolean {
   const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
   return emailRegex.test(email)
-}
-
-function validatePassword(password: string): { valid: boolean; error?: string } {
-  if (!password) {
-    return { valid: false, error: 'Password is required' }
-  }
-  if (password.length < MIN_PASSWORD_LENGTH) {
-    return { valid: false, error: `Password must be at least ${MIN_PASSWORD_LENGTH} characters` }
-  }
-  return { valid: true }
-}
-
-async function hashPassword(password: string): Promise<string> {
-  return bcrypt.hash(password, SALT_ROUNDS)
 }
 
 export async function addOwnerCommand(email: string) {
@@ -44,8 +27,11 @@ export async function addOwnerCommand(email: string) {
     process.exit(1)
   }
 
+  // Normalize email
+  const normalizedEmail = email.toLowerCase().trim()
+
   // Validate email
-  if (!validateEmail(email)) {
+  if (!validateEmail(normalizedEmail)) {
     console.error(chalk.red('❌ Invalid email address'))
     process.exit(1)
   }
@@ -76,17 +62,17 @@ export async function addOwnerCommand(email: string) {
     // Check if user already exists
     const existingUser = db
       .prepare('SELECT id FROM users WHERE email = ?')
-      .get(email) as { id: string } | undefined
+      .get(normalizedEmail) as { id: string } | undefined
 
     let userId: string
 
     if (existingUser) {
       userId = existingUser.id
-      console.log(chalk.yellow(`⚠️  User with email ${email} already exists`))
+      console.log(chalk.yellow(`⚠️  User with email ${normalizedEmail} already exists`))
 
       // Update password
       db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(passwordHash, userId)
-      console.log(chalk.green(`✓ Updated password for ${email}`))
+      console.log(chalk.green(`✓ Updated password for ${normalizedEmail}`))
 
       // Check if already a collaborator
       const existingCollaborator = db
@@ -111,15 +97,15 @@ export async function addOwnerCommand(email: string) {
       userId = generateId('usr')
       db.prepare('INSERT INTO users (id, email, password_hash) VALUES (?, ?, ?)').run(
         userId,
-        email,
+        normalizedEmail,
         passwordHash
       )
-      console.log(chalk.green(`✓ Created user: ${email}`))
+      console.log(chalk.green(`✓ Created user: ${normalizedEmail}`))
     }
 
     // Add as owner
     db.prepare('INSERT INTO collaborators (user_id, role) VALUES (?, ?)').run(userId, 'owner')
-    console.log(chalk.green(`✓ Added ${email} as owner`))
+    console.log(chalk.green(`✓ Added ${normalizedEmail} as owner`))
 
     db.close()
 

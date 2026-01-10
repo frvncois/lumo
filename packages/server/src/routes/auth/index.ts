@@ -106,9 +106,12 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     }
 
     // Validate email
-    if (!email || typeof email !== 'string') {
+    if (!email || typeof email !== 'string' || email.trim().length === 0) {
       return errors.validation(reply, 'Email is required')
     }
+
+    // Normalize email: lowercase and trim whitespace
+    const normalizedEmail = email.toLowerCase().trim()
 
     const passwordValidation = validatePassword(password)
     if (!passwordValidation.valid) {
@@ -127,7 +130,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     // Create user with password
     const userId = generateId('user')
     const passwordHash = await hashPassword(password)
-    const user = createUser(app.db, userId, email, passwordHash)
+    const user = createUser(app.db, userId, normalizedEmail, passwordHash)
 
     // Create owner collaborator
     const collaboratorId = generateId('collaborator')
@@ -176,7 +179,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const { email, password } = request.body
 
     // Validate inputs
-    if (!email || typeof email !== 'string' || !password || typeof password !== 'string') {
+    if (!email || typeof email !== 'string' || email.trim().length === 0 || !password || typeof password !== 'string') {
       logAuditEvent(app, {
         event: 'AUTH_LOGIN_FAILURE',
         ip: request.ip,
@@ -186,15 +189,18 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       return errors.invalidCredentials(reply)
     }
 
+    // Normalize email: lowercase and trim whitespace
+    const normalizedEmail = email.toLowerCase().trim()
+
     // Get user by email
-    const user = getUserByEmail(app.db, email)
+    const user = getUserByEmail(app.db, normalizedEmail)
     if (!user || !user.passwordHash) {
       // Don't reveal if user exists
       logAuditEvent(app, {
         event: 'AUTH_LOGIN_FAILURE',
         ip: request.ip,
         userAgent: request.headers['user-agent'],
-        details: { email },
+        details: { email: normalizedEmail },
       })
       return errors.invalidCredentials(reply)
     }
@@ -206,7 +212,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         event: 'AUTH_LOGIN_FAILURE',
         ip: request.ip,
         userAgent: request.headers['user-agent'],
-        details: { email },
+        details: { email: normalizedEmail },
       })
       return errors.invalidCredentials(reply)
     }
@@ -263,13 +269,17 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
   /**
    * PUT /api/me/password
    * Change current user's password
+   * Rate limited to prevent brute-force attacks on currentPassword
    */
   app.put<{
     Body: {
       currentPassword: string
       newPassword: string
     }
-  }>('/api/me/password', { preHandler: requireAuth }, async (request, reply) => {
+  }>('/api/me/password', {
+    ...authRateLimit,
+    preHandler: requireAuth
+  }, async (request, reply) => {
     const { user } = request as AuthenticatedRequest
     const { currentPassword, newPassword } = request.body
 
@@ -301,13 +311,13 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     updatePassword(app.db, user.id, newPasswordHash)
 
     logAuditEvent(app, {
-      event: 'PASSWORD_CHANGED',
+      event: 'PASSWORD_CHANGE',
       userId: user.id,
       ip: request.ip,
       userAgent: request.headers['user-agent'],
     })
 
-    return { ok: true }
+    return { success: true }
   })
 
   /**
@@ -324,6 +334,6 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
       userAgent: request.headers['user-agent'],
     })
 
-    return { ok: true }
+    return { success: true }
   })
 }

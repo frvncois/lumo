@@ -204,7 +204,7 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
 
     deletePageTranslation(app.db, id, lang)
 
-    return { ok: true }
+    return { success: true }
   })
 
   /**
@@ -221,6 +221,6 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
 
     deletePage(app.db, request.params.id)
 
-    return { ok: true }
+    return { success: true }
   })
 }

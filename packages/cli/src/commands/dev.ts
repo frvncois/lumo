@@ -67,6 +67,7 @@ export async function devCommand() {
     shell: true,
     env: {
       ...process.env,
+      NODE_ENV: process.env.NODE_ENV || 'development',
       LUMO_CONFIG_PATH: configPath,
       LUMO_DB_PATH: dbPath,
     },
@@ -78,6 +79,10 @@ export async function devCommand() {
     cwd: adminDir,
     stdio: 'inherit',
     shell: true,
+    env: {
+      ...process.env,
+      NODE_ENV: process.env.NODE_ENV || 'development',
+    },
   })
 
   // Handle graceful shutdown

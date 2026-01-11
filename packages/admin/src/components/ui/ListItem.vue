@@ -3,7 +3,7 @@
     :is="to || editUrl ? 'router-link' : 'div'"
     :to="to || editUrl"
     :class="[
-      'flex items-center justify-between px-4 py-3 transition-colors',
+      'flex items-center justify-between px-4 py-3 transition-colors border rounded-2xl',
       to || editUrl ? 'cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50' : ''
     ]"
   >

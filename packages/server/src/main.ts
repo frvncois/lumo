@@ -18,12 +18,14 @@ import { createDatabase, closeDatabase } from '@lumo/db'
 import { startCleanupScheduler, stopCleanupScheduler } from './jobs/cleanup.js'
 import { createConfigLoader, type ConfigLoader } from './config/loader.js'
 import { ServerDefaults } from './constants.js'
+import { validateEnvironment, printValidationResults } from './utils/env.js'
 import type Database from 'better-sqlite3'
 
 // Track resources for cleanup
 let cleanupInterval: NodeJS.Timeout | null = null
 let configLoader: ConfigLoader | null = null
 let database: Database.Database | null = null
+let fastifyApp: Awaited<ReturnType<typeof createApp>> | null = null
 
 /**
  * Get or create the cookie secret.
@@ -72,6 +74,16 @@ function getOrCreateCookieSecret(dbPath: string): string {
  */
 async function start() {
   try {
+    // Validate environment variables
+    console.log('Validating environment...')
+    const envValidation = validateEnvironment()
+    printValidationResults(envValidation)
+
+    if (!envValidation.valid) {
+      console.error('Cannot start server with invalid environment configuration')
+      process.exit(1)
+    }
+
     // Load file configuration
     console.log('Loading configuration from file...')
     const configPath = process.env.LUMO_CONFIG_PATH || './lumo.config.ts'
@@ -101,13 +113,13 @@ async function start() {
 
     // Create Fastify app
     console.log('Creating application...')
-    const app = await createApp({ config, db: database, configLoader })
+    fastifyApp = await createApp({ config, db: database, configLoader })
 
     // Start server
     const port = parseInt(process.env.PORT || String(ServerDefaults.PORT), 10)
     const host = process.env.HOST || ServerDefaults.HOST
 
-    await app.listen({ port, host })
+    await fastifyApp.listen({ port, host })
 
     console.log(`Server listening on http://${host}:${port}`)
   } catch (error) {
@@ -123,20 +135,37 @@ async function start() {
 async function cleanup() {
   console.log('Cleaning up resources...')
 
+  // Close Fastify server gracefully (stop accepting new connections)
+  if (fastifyApp) {
+    try {
+      console.log('Closing HTTP server...')
+      await fastifyApp.close()
+      console.log('HTTP server closed')
+      fastifyApp = null
+    } catch (err) {
+      console.error('Error closing HTTP server:', err)
+    }
+  }
+
+  // Stop scheduled jobs
   if (cleanupInterval) {
     stopCleanupScheduler(cleanupInterval)
     cleanupInterval = null
   }
 
+  // Dispose config loader
   if (configLoader) {
     configLoader.dispose()
     configLoader = null
   }
 
+  // Close database connection
   if (database) {
     closeDatabase(database)
     database = null
   }
+
+  console.log('Cleanup complete')
 }
 
 // Handle shutdown signals

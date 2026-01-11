@@ -70,6 +70,18 @@ export function verifyCsrfToken(token: string): boolean {
 }
 
 /**
+ * Paths that are exempt from CSRF validation
+ * These are pre-authentication endpoints where no session exists yet
+ */
+const CSRF_EXEMPT_PATHS = [
+  '/api/auth/setup',    // Initial project setup
+  '/api/auth/status',   // Auth status check (pre-setup)
+  '/api/auth/login',    // User login (CSRF cookie is set but not yet validated)
+  '/api/config',        // Public config endpoint
+  '/health',            // Health check endpoint
+]
+
+/**
  * CSRF middleware - sets cookie and validates on mutations
  */
 export async function csrfProtection(
@@ -77,6 +89,22 @@ export async function csrfProtection(
   reply: FastifyReply
 ): Promise<void> {
   const safeMethods = ['GET', 'HEAD', 'OPTIONS']
+
+  // Check if path is exempt from CSRF validation
+  const isExempt = CSRF_EXEMPT_PATHS.some(path => request.url.startsWith(path))
+  if (isExempt) {
+    // Still set CSRF cookie on GET requests for exempt paths
+    if (safeMethods.includes(request.method) && !request.cookies[CSRF_COOKIE_NAME]) {
+      const token = generateCsrfToken()
+      reply.setCookie(CSRF_COOKIE_NAME, token, {
+        httpOnly: false,
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+      })
+    }
+    return
+  }
 
   if (safeMethods.includes(request.method)) {
     if (!request.cookies[CSRF_COOKIE_NAME]) {

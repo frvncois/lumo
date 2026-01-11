@@ -25,6 +25,7 @@ import { validatePageTranslation } from '@lumo/core'
 import { generateId } from '../../utils/tokens.js'
 import type { PageTranslations, TranslationContent } from '@lumo/core'
 import { errors } from '../../utils/errors.js'
+import { sanitizeContentFields } from '../../utils/sanitize.js'
 import {
   adminListPagesSchema,
   adminGetPageByIdSchema,
@@ -97,16 +98,24 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
       pages: { [id]: schema },
     }
 
-    // Validate each translation
+    // Validate and sanitize each translation
+    const sanitizedTranslations: PageTranslations = {}
     for (const [lang, content] of Object.entries(translations)) {
       const result = validatePageTranslation(id, lang, content, tempConfig)
       if (!result.success) {
         return errors.validation(reply, 'Validation failed', result.errors)
       }
+
+      // Sanitize richtext fields
+      const sanitizedFields = sanitizeContentFields(content.fields || {}, schema.fields)
+      sanitizedTranslations[lang] = {
+        ...content,
+        fields: sanitizedFields
+      }
     }
 
     try {
-      const page = createPage(app.db, id, translations)
+      const page = createPage(app.db, id, sanitizedTranslations)
       return reply.code(201).send(page)
     } catch (error: any) {
       // Handle unique constraint violation
@@ -165,9 +174,16 @@ export async function registerAdminPagesRoutes(app: FastifyInstance): Promise<vo
       })
     }
 
+    // Sanitize richtext fields
+    const sanitizedFields = sanitizeContentFields(content.fields || {}, schema.fields)
+    const sanitizedContent = {
+      ...content,
+      fields: sanitizedFields
+    }
+
     // Attempt upsert - let database handle uniqueness
     try {
-      upsertPageTranslation(app.db, id, lang, content)
+      upsertPageTranslation(app.db, id, lang, sanitizedContent)
       const updated = getPageById(app.db, id)
       return updated
     } catch (error: any) {

@@ -332,3 +332,44 @@ export const previewGetByTokenSchema: FastifySchema = {
     },
   },
 }
+
+// Admin Collaborators schemas
+export const adminListCollaboratorsSchema: FastifySchema = {}
+
+export const adminCreateCollaboratorSchema: FastifySchema = {
+  body: {
+    type: 'object',
+    required: ['email', 'role'],
+    properties: {
+      email: { type: 'string', format: 'email' },
+      role: { type: 'string', enum: ['owner', 'editor'] },
+    },
+  },
+}
+
+export const adminUpdateCollaboratorRoleSchema: FastifySchema = {
+  params: {
+    type: 'object',
+    required: ['userId'],
+    properties: {
+      userId: { type: 'string', minLength: 1 },
+    },
+  },
+  body: {
+    type: 'object',
+    required: ['role'],
+    properties: {
+      role: { type: 'string', enum: ['owner', 'editor'] },
+    },
+  },
+}
+
+export const adminDeleteCollaboratorSchema: FastifySchema = {
+  params: {
+    type: 'object',
+    required: ['userId'],
+    properties: {
+      userId: { type: 'string', minLength: 1 },
+    },
+  },
+}

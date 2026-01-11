@@ -18,7 +18,7 @@
             v-else
             v-for="[pageId, pageSchema] in Object.entries(config.pages)"
             :key="pageId"
-            :title="pageSchema.name"
+            :title="getPageTitle(pageId, pageSchema)"
             :subtitle="`Slug: ${pageId}`"
             :to="`/admin/pages/${pageId}`"
           />
@@ -161,6 +161,7 @@
 import { ref, onMounted } from 'vue'
 import { useRouter } from 'vue-router'
 import { useConfig } from '../composables/useConfig'
+import { api } from '../utils/api'
 import { Card, CardHeader, CardContent, List, ListItem, ListEmpty, Button } from '../components/ui'
 import IconPage from '../components/icons/IconPage.vue'
 import IconPost from '../components/icons/IconPost.vue'
@@ -168,11 +169,45 @@ import IconPost from '../components/icons/IconPost.vue'
 const router = useRouter()
 const { config, refresh } = useConfig()
 const mounted = ref(false)
+const pages = ref<any[]>([])
 
-onMounted(() => {
+onMounted(async () => {
   mounted.value = true
-  refresh()
+  await refresh()
+  await loadPages()
 })
+
+async function loadPages() {
+  try {
+    const result = await api.listPages()
+    pages.value = result.items || []
+  } catch (err) {
+    // If pages fail to load, we'll just show schema names
+    console.error('Failed to load pages:', err)
+  }
+}
+
+function getPageTitle(pageId: string, pageSchema: any): string {
+  // Find the page in the loaded pages
+  const page = pages.value.find(p => p.id === pageId)
+
+  if (page && page.translations && config.value?.defaultLanguage) {
+    // Try to get the default language title
+    const defaultLangTranslation = page.translations[config.value.defaultLanguage]
+    if (defaultLangTranslation?.title) {
+      return defaultLangTranslation.title
+    }
+
+    // Fallback: use first available translation
+    const firstTranslation = Object.values(page.translations)[0] as any
+    if (firstTranslation?.title) {
+      return firstTranslation.title
+    }
+  }
+
+  // Fallback: use schema name
+  return pageSchema.name
+}
 
 function goToSchemaEditor() {
   router.push({ path: '/admin/settings', query: { tab: 'schema' } })

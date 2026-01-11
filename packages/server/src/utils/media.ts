@@ -17,6 +17,20 @@ const __dirname = path.dirname(__filename)
 export const UPLOADS_DIR = path.resolve(__dirname, '../../../..', 'uploads')
 
 /**
+ * Ensure uploads directory exists
+ */
+export async function ensureUploadsDir(): Promise<void> {
+  try {
+    await fsPromises.mkdir(UPLOADS_DIR, { recursive: true })
+  } catch (err) {
+    const error = err as NodeJS.ErrnoException
+    if (error.code !== 'EEXIST') {
+      throw new Error(`Failed to create uploads directory: ${error.message}`)
+    }
+  }
+}
+
+/**
  * Get file extension from filename
  */
 export function getFileExtension(filename: string): string {
@@ -42,8 +56,16 @@ export async function saveFile(file: MultipartFile, id: string): Promise<string>
   const filename = `${id}.${ext}`
   const filepath = path.join(UPLOADS_DIR, filename)
 
-  // Save file
-  await pipeline(file.file, fs.createWriteStream(filepath))
+  // Ensure uploads directory exists
+  await ensureUploadsDir()
+
+  try {
+    // Save file with error handling
+    await pipeline(file.file, fs.createWriteStream(filepath))
+  } catch (err) {
+    const error = err as Error
+    throw new Error(`Failed to save file: ${error.message}`)
+  }
 
   return filename
 }

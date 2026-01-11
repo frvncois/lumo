@@ -65,13 +65,14 @@
       />
     </div>
 
-    <!-- Teleport Header Actions -->
-    <Teleport to="#header-actions" v-if="mounted">
+    <!-- Teleport Action Buttons to Details Sidebar -->
+    <Teleport to="#details-actions" v-if="mounted">
       <Button
         @click="handlePreview"
         :disabled="isCreatingPreview"
         variant="outline"
         size="sm"
+        class="w-full"
       >
         {{ isCreatingPreview ? 'Creating...' : 'Preview' }}
       </Button>
@@ -80,6 +81,7 @@
         :disabled="isSaving"
         variant="default"
         size="sm"
+        class="w-full"
       >
         {{ isSaving ? 'Saving...' : 'Save' }}
       </Button>
@@ -210,17 +212,16 @@ onMounted(async () => {
 function loadTranslationData() {
   const translation = currentTranslation.value
 
-  // Title is the page schema name, not per-translation
-  if (pageSchema.value) {
-    translationTitle.value = pageSchema.value.name || ''
-  }
-
   if (translation) {
+    // Load all data from the translation (title is per-language)
+    translationTitle.value = translation.title || ''
     translationSlug.value = translation.slug || ''
     translationFields.value = translation.fields || {}
     translationSeo.value = translation.seo || {}
   } else {
-    // Reset to empty for new translation
+    // Reset to defaults for new translation
+    // Default title to schema name as a starting point
+    translationTitle.value = pageSchema.value?.name || ''
     translationSlug.value = pageId.value // Default slug to page ID
     translationFields.value = {}
     translationSeo.value = {}

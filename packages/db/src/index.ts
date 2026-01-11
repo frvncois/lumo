@@ -34,6 +34,7 @@ export {
   getPageById,
   getPageBySlug,
   listPages,
+  listPagesForLanguage,
   upsertPageTranslation,
   deletePageTranslation,
   deletePage,

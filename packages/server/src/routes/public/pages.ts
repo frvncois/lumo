@@ -6,7 +6,7 @@
  */
 
 import type { FastifyInstance } from 'fastify'
-import { getPageBySlug, listPages } from '@lumo/db'
+import { getPageBySlug, listPagesForLanguage } from '@lumo/db'
 import { errors } from '../../utils/errors.js'
 import { publicListPagesSchema, publicGetPageBySlugSchema } from '../../schemas/index.js'
 
@@ -25,24 +25,8 @@ export async function registerPublicPagesRoutes(app: FastifyInstance): Promise<v
       return errors.validation(reply, `Language "${language}" is not configured`)
     }
 
-    // Get all pages from database
-    const allPages = listPages(app.db)
-
-    const items = allPages
-      .map((page) => {
-        const translation = page.translations[language]
-        if (!translation) {
-          return null
-        }
-
-        return {
-          id: page.id,
-          slug: translation.slug,
-          title: translation.title,
-          updatedAt: page.updatedAt,
-        }
-      })
-      .filter((item): item is NonNullable<typeof item> => item !== null)
+    // Get pages with optimized single JOIN query
+    const items = listPagesForLanguage(app.db, language)
 
     return { items }
   })

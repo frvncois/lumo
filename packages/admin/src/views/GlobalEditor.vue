@@ -45,13 +45,14 @@
       </Card>
     </div>
 
-    <!-- Teleport Header Actions -->
-    <Teleport to="#header-actions" v-if="mounted">
+    <!-- Teleport Action Buttons to Details Sidebar -->
+    <Teleport to="#details-actions" v-if="mounted">
       <Button
         @click="handleSave"
         :disabled="isSaving"
         variant="default"
         size="sm"
+        class="w-full"
       >
         {{ isSaving ? 'Saving...' : 'Save' }}
       </Button>

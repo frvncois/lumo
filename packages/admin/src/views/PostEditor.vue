@@ -65,32 +65,34 @@
       />
     </div>
 
-    <!-- Teleport Header Actions -->
-    <Teleport to="#header-actions" v-if="mounted">
+    <!-- Teleport Action Buttons to Details Sidebar -->
+    <Teleport to="#details-actions" v-if="mounted">
       <Button
         @click="handlePreview"
         :disabled="isCreatingPreview"
         variant="outline"
         size="sm"
+        class="w-full"
       >
         {{ isCreatingPreview ? 'Creating...' : 'Preview' }}
-      </Button>
-      <Button
-        @click="handleDelete"
-        :disabled="isDeleting"
-        variant="outline"
-        size="sm"
-        class="!text-red-600 !border-red-300 hover:!bg-red-50"
-      >
-        {{ isDeleting ? 'Deleting...' : 'Delete' }}
       </Button>
       <Button
         @click="handleSave"
         :disabled="isSaving"
         variant="default"
         size="sm"
+        class="w-full"
       >
         {{ isSaving ? 'Saving...' : 'Save' }}
+      </Button>
+      <Button
+        @click="handleDelete"
+        :disabled="isDeleting"
+        variant="outline"
+        size="sm"
+        class="w-full !text-red-600 !border-red-300 hover:!bg-red-50"
+      >
+        {{ isDeleting ? 'Deleting...' : 'Delete' }}
       </Button>
     </Teleport>
 

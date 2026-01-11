@@ -18,12 +18,15 @@ export function createPage(
 ): Page {
   const now = new Date().toISOString()
 
-  // Insert page
+  // For pages, the ID is the schema slug
+  const schemaSlug = id
+
+  // Insert page with schema_slug
   const insertPage = db.prepare(`
-    INSERT INTO pages (id, created_at, updated_at)
-    VALUES (?, ?, ?)
+    INSERT INTO pages (id, schema_slug, created_at, updated_at)
+    VALUES (?, ?, ?, ?)
   `)
-  insertPage.run(id, now, now)
+  insertPage.run(id, schemaSlug, now, now)
 
   // Insert translations
   for (const [language, content] of Object.entries(translations)) {
@@ -120,6 +123,45 @@ export function listPages(db: Database.Database): Array<{
       id: page.id,
       translations,
       updatedAt: page.updated_at,
+    }
+  })
+}
+
+/**
+ * List pages for a specific language (optimized for public API)
+ * Uses a single JOIN query instead of N+1 queries
+ */
+export function listPagesForLanguage(
+  db: Database.Database,
+  language: string
+): Array<{
+  id: string
+  slug: string
+  title: string
+  updatedAt: string
+}> {
+  const query = `
+    SELECT p.id, pt.slug, pt.content, pt.updated_at
+    FROM pages p
+    JOIN page_translations pt ON p.id = pt.page_id
+    WHERE pt.language = ?
+    ORDER BY p.updated_at DESC
+  `
+
+  const rows = db.prepare(query).all(language) as Array<{
+    id: string
+    slug: string
+    content: string
+    updated_at: string
+  }>
+
+  return rows.map((row) => {
+    const content = JSON.parse(row.content)
+    return {
+      id: row.id,
+      slug: row.slug,
+      title: content.title,
+      updatedAt: row.updated_at,
     }
   })
 }

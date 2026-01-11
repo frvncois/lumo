@@ -17,13 +17,16 @@ import {
   upsertGlobalTranslation,
   deleteGlobalTranslation,
 } from '@lumo/db'
+import { requireAuth } from '../../middleware/auth.js'
+import { requireOwner } from '../../middleware/permissions.js'
+import { sanitizeContentFields } from '../../utils/sanitize.js'
 
 export async function registerAdminGlobalRoutes(app: FastifyInstance): Promise<void> {
   /**
    * GET /api/admin/globals
    * List all globals with translations
    */
-  app.get('/api/admin/globals', async (request, reply) => {
+  app.get('/api/admin/globals', { preHandler: requireAuth }, async (request, reply) => {
     const schemas = app.config.globals || {}
     const items = []
 
@@ -47,7 +50,7 @@ export async function registerAdminGlobalRoutes(app: FastifyInstance): Promise<v
    */
   app.get<{
     Params: { slug: string }
-  }>('/api/admin/globals/:slug', async (request, reply) => {
+  }>('/api/admin/globals/:slug', { preHandler: requireAuth }, async (request, reply) => {
     const { slug } = request.params
 
     const schema = app.config.globals?.[slug]
@@ -79,7 +82,7 @@ export async function registerAdminGlobalRoutes(app: FastifyInstance): Promise<v
   app.put<{
     Params: { slug: string; lang: string }
     Body: { fields: Fields }
-  }>('/api/admin/globals/:slug/translations/:lang', async (request, reply) => {
+  }>('/api/admin/globals/:slug/translations/:lang', { preHandler: requireAuth }, async (request, reply) => {
     const { slug, lang } = request.params
     const { fields } = request.body
 
@@ -115,6 +118,9 @@ export async function registerAdminGlobalRoutes(app: FastifyInstance): Promise<v
       })
     }
 
+    // Sanitize richtext fields
+    const sanitizedFields = sanitizeContentFields(fields || {}, schema.fields)
+
     // Get or create global instance
     let global = getGlobalBySchemaSlug(app.db, slug)
     if (!global) {
@@ -122,7 +128,7 @@ export async function registerAdminGlobalRoutes(app: FastifyInstance): Promise<v
     }
 
     // Upsert translation
-    const translation = upsertGlobalTranslation(app.db, global.id, lang, fields)
+    const translation = upsertGlobalTranslation(app.db, global.id, lang, sanitizedFields)
 
     return {
       schemaSlug: slug,
@@ -138,7 +144,7 @@ export async function registerAdminGlobalRoutes(app: FastifyInstance): Promise<v
    */
   app.delete<{
     Params: { slug: string; lang: string }
-  }>('/api/admin/globals/:slug/translations/:lang', async (request, reply) => {
+  }>('/api/admin/globals/:slug/translations/:lang', { preHandler: [requireAuth, requireOwner] }, async (request, reply) => {
     const { slug, lang } = request.params
 
     const global = getGlobalBySchemaSlug(app.db, slug)

@@ -26,6 +26,7 @@ import { validatePostTranslation, validatePostStatus } from '@lumo/core'
 import { generateId } from '../../utils/tokens.js'
 import type { TranslationContent, PostStatus, Post } from '@lumo/core'
 import { errors } from '../../utils/errors.js'
+import { sanitizeContentFields } from '../../utils/sanitize.js'
 import {
   adminListPostsSchema,
   adminGetPostByIdSchema,
@@ -177,9 +178,22 @@ export async function registerAdminPostsRoutes(app: FastifyInstance): Promise<vo
       return errors.validation(reply, 'Validation failed', result.errors)
     }
 
+    // Get post type schema for sanitization
+    const postTypeSchema = app.config.postTypes?.[post.type]
+    if (!postTypeSchema) {
+      return errors.notFound(reply, `Post type "${post.type}" not found`)
+    }
+
+    // Sanitize richtext fields
+    const sanitizedFields = sanitizeContentFields(content.fields || {}, postTypeSchema.fields)
+    const sanitizedContent = {
+      ...content,
+      fields: sanitizedFields
+    }
+
     // Attempt upsert - let database handle uniqueness
     try {
-      upsertPostTranslation(app.db, id, lang, content)
+      upsertPostTranslation(app.db, id, lang, sanitizedContent)
       const updated = getPostById(app.db, id)
       return updated
     } catch (error: any) {

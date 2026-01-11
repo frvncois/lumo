@@ -8,6 +8,7 @@ import multipart from '@fastify/multipart'
 import staticFiles from '@fastify/static'
 import cors from '@fastify/cors'
 import rateLimit from '@fastify/rate-limit'
+import compress from '@fastify/compress'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 import type { LumoConfig } from '@lumo/core'
@@ -34,10 +35,17 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   // Create Fastify instance
   const app = Fastify({
     logger,
+    bodyLimit: 10 * 1024 * 1024, // 10MB default body size limit
+    requestIdHeader: 'x-request-id',
+    requestIdLogLabel: 'reqId',
+    disableRequestLogging: false,
+    requestTimeout: 30000, // 30 second timeout for requests
+    connectionTimeout: 0, // No idle timeout (handled by keep-alive)
+    keepAliveTimeout: 72000, // 72 seconds (recommended for AWS ALB)
   })
 
-  // Security headers
-  app.addHook('onSend', async (_request, reply, payload) => {
+  // Security headers and request ID
+  app.addHook('onSend', async (request, reply, payload) => {
     reply.header('Content-Security-Policy', [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval'",
@@ -53,20 +61,18 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
     reply.header('X-Frame-Options', 'DENY')
     reply.header('X-XSS-Protection', '1; mode=block')
     reply.header('Referrer-Policy', 'strict-origin-when-cross-origin')
+    reply.header('X-Request-ID', request.id)
     return payload
   })
 
   // Register plugins
-  // Validate COOKIE_SECRET
+  // Get cookie secret (main.ts generates this before createApp is called)
   const cookieSecret = process.env.COOKIE_SECRET
   const nodeEnv = process.env.NODE_ENV
 
-  if (nodeEnv === 'development') {
-    if (!cookieSecret) {
-      console.warn('⚠️  WARNING: COOKIE_SECRET not set. Using insecure default for development only.')
-    }
-  } else {
-    // Production or any other environment
+  // In production, validate the secret
+  // In development, main.ts handles warning and fallback
+  if (nodeEnv !== 'development') {
     if (!cookieSecret) {
       throw new Error(
         'COOKIE_SECRET environment variable is required. ' +
@@ -104,6 +110,13 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   await app.register(cors, {
     origin: corsOrigin || (process.env.NODE_ENV === 'production' ? false : true),
     credentials: true,
+  })
+
+  // Register compression (gzip/brotli)
+  await app.register(compress, {
+    global: true,
+    threshold: 1024, // Only compress responses larger than 1KB
+    encodings: ['gzip', 'deflate'],
   })
 
   // Register rate limiting
@@ -200,7 +213,27 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
 
   // Health check endpoint
   app.get('/health', async () => {
-    return { status: 'ok' }
+    const startTime = Date.now()
+
+    // Check database connectivity
+    let dbStatus = 'ok'
+    try {
+      db.prepare('SELECT 1').get()
+    } catch (err) {
+      dbStatus = 'error'
+      app.log.error(err, 'Health check: Database connection failed')
+    }
+
+    const responseTime = Date.now() - startTime
+
+    return {
+      status: dbStatus === 'ok' ? 'ok' : 'degraded',
+      timestamp: new Date().toISOString(),
+      uptime: process.uptime(),
+      database: dbStatus,
+      responseTime,
+      version: '0.1.0',
+    }
   })
 
   // Redirect root to admin
@@ -218,6 +251,7 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   const { registerAdminMediaRoutes } = await import('./routes/admin/media.js')
   const { registerAdminSchemaRoutes } = await import('./routes/admin/schemas.js')
   const { registerAdminSettingsRoutes } = await import('./routes/admin/settings.js')
+  const { registerAdminCollaboratorsRoutes } = await import('./routes/admin/collaborators.js')
   const { registerPreviewRoutes } = await import('./routes/preview/index.js')
   const { registerAuthRoutes } = await import('./routes/auth/index.js')
 
@@ -230,10 +264,9 @@ export async function createApp(options: AppOptions): Promise<FastifyInstance> {
   await registerAdminMediaRoutes(app)
   await registerAdminSchemaRoutes(app)
   await registerAdminSettingsRoutes(app)
+  await registerAdminCollaboratorsRoutes(app)
   await registerPreviewRoutes(app)
   await registerAuthRoutes(app)
-
-  // TODO: Register admin collaborators routes
 
   return app
 }

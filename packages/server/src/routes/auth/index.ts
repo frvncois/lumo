@@ -28,7 +28,17 @@ import { errors } from '../../utils/errors.js'
 import { SessionConfig, UserRoles } from '../../constants.js'
 import { authSetupSchema, authLoginSchema } from '../../schemas/index.js'
 import { logAuditEvent } from '../../utils/audit.js'
-import crypto from 'node:crypto'
+import crypto, { createHash } from 'node:crypto'
+import { generateCsrfToken } from '../../utils/csrf.js'
+
+/**
+ * Hash email for audit logging.
+ * We don't store plain emails in logs to protect user privacy.
+ * The hash is truncated to 16 chars - enough to correlate logs, not enough to reverse.
+ */
+function hashEmailForAudit(email: string): string {
+  return createHash('sha256').update(email.toLowerCase()).digest('hex').slice(0, 16)
+}
 
 // Helper functions
 function generateProjectId(): string {
@@ -78,11 +88,26 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
    * GET /api/auth/status
    * Check authentication status and capabilities
    */
-  app.get('/api/auth/status', async () => {
+  app.get('/api/auth/status', async (request, reply) => {
     const needsSetup = !hasAnyUsers(app.db)
+
+    // Generate and set CSRF token for subsequent requests
+    // The CSRF middleware will also set the cookie, but we return it here
+    // so the frontend can read it directly if needed
+    let csrfToken = request.cookies.csrf
+    if (!csrfToken) {
+      csrfToken = generateCsrfToken()
+      reply.setCookie('csrf', csrfToken, {
+        httpOnly: false, // Must be readable by JavaScript
+        secure: process.env.NODE_ENV === 'production',
+        sameSite: 'lax',
+        path: '/',
+      })
+    }
 
     return {
       needsSetup,
+      csrfToken,
     }
   })
 
@@ -139,13 +164,22 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     // Create session token
     const sessionToken = createSessionToken(user.id, collaborator.role, undefined)
 
-    // Set cookie
+    // Set session cookie
     reply.setCookie('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: SessionConfig.MAX_AGE_SECONDS,
+    })
+
+    // Generate and set CSRF token for subsequent authenticated requests
+    const csrfToken = generateCsrfToken()
+    reply.setCookie('csrf', csrfToken, {
+      httpOnly: false, // Must be readable by JavaScript
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
     })
 
     logAuditEvent(app, {
@@ -166,6 +200,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         key: projectKey,
         name: projectName.trim(),
       },
+      csrfToken,
     }
   })
 
@@ -184,7 +219,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         event: 'AUTH_LOGIN_FAILURE',
         ip: request.ip,
         userAgent: request.headers['user-agent'],
-        details: { email },
+        details: { emailHash: hashEmailForAudit(email) },
       })
       return errors.invalidCredentials(reply)
     }
@@ -200,7 +235,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         event: 'AUTH_LOGIN_FAILURE',
         ip: request.ip,
         userAgent: request.headers['user-agent'],
-        details: { email: normalizedEmail },
+        details: { emailHash: hashEmailForAudit(normalizedEmail) },
       })
       return errors.invalidCredentials(reply)
     }
@@ -212,7 +247,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         event: 'AUTH_LOGIN_FAILURE',
         ip: request.ip,
         userAgent: request.headers['user-agent'],
-        details: { email: normalizedEmail },
+        details: { emailHash: hashEmailForAudit(normalizedEmail) },
       })
       return errors.invalidCredentials(reply)
     }
@@ -227,13 +262,22 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
     const passwordChangedAt = getPasswordChangedAt(app.db, user.id)
     const sessionToken = createSessionToken(user.id, collaborator.role, passwordChangedAt ?? undefined)
 
-    // Set cookie
+    // Set session cookie
     reply.setCookie('session', sessionToken, {
       httpOnly: true,
       secure: process.env.NODE_ENV === 'production',
       sameSite: 'lax',
       path: '/',
       maxAge: SessionConfig.MAX_AGE_SECONDS,
+    })
+
+    // Generate and set CSRF token for subsequent authenticated requests
+    const csrfToken = generateCsrfToken()
+    reply.setCookie('csrf', csrfToken, {
+      httpOnly: false, // Must be readable by JavaScript
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      path: '/',
     })
 
     logAuditEvent(app, {
@@ -249,6 +293,7 @@ export async function registerAuthRoutes(app: FastifyInstance): Promise<void> {
         email: user.email,
         role: collaborator.role,
       },
+      csrfToken,
     }
   })
 

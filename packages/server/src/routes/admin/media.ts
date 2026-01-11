@@ -213,8 +213,24 @@ export async function registerAdminMediaRoutes(app: FastifyInstance): Promise<vo
     // Check if media is in use
     const references = getMediaReferences(app.db, id)
     if (references.length > 0) {
-      // Warn but allow deletion (explicit deletion as per spec)
-      app.log.warn(`Deleting media ${id} which is referenced in ${references.length} locations`)
+      // Block deletion if media is referenced
+      const refSummary = references.map(ref =>
+        `${ref.type} (ID: ${ref.id}, lang: ${ref.language})`
+      ).join(', ')
+
+      return reply.code(409).send({
+        error: {
+          code: 'MEDIA_IN_USE',
+          message: `Cannot delete media: it is referenced in ${references.length} content item(s)`,
+          details: {
+            references: references.map(ref => ({
+              type: ref.type,
+              id: ref.id,
+              language: ref.language,
+            })),
+          },
+        },
+      })
     }
 
     const filename = media.url.replace('/uploads/', '')
